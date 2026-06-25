@@ -206,83 +206,83 @@ elif app_mode == "🔥 Team Leaderboard":
 # MODULE 4: ATHLETE PROGRESS
 # ==========================================
 elif app_mode == "📈 Athlete Progress":
-st.title("📈 Athlete Performance Trajectory Deep Dive")
-selected_athlete = st.selectbox("Select Athlete Profile:", st.session_state.athletes['name'].unique())
-athlete_id = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete]['id'].values[0]
-athlete_logs = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == athlete_id) & (st.session_state.workout_logs['type'] == "20m_fly")]
-if len(athlete_logs) >= 1:
-athlete_logs = athlete_logs.sort_values(by="date")
-# Plot time series chart using Plotly
-fig = px.line(athlete_logs, x="date", y="fat", title="20m Fly FAT Progression Trend", markers=True)
-fig.update_yaxes(autorange="reverse") # Faster means smaller numbers
-st.plotly_chart(fig, use_container_width=True)
-# Check for Central Nervous System (CNS) Fatigue
-if len(athlete_logs) >= 2:
-last_two = athlete_logs.tail(2)['fat'].values
-decay_percent = ((last_two[1] - last_two[0]) / last_two[0]) * 100
-if decay_percent > 4.0:
-st.warning(f"⚠️ CNS Fatigue Advisory Warning Alert: Velocity dropped by {round(decay_percent,1)}% on last rep. Advise immediate recovery down-regulation.")
-else:
-st.success("🟢 CNS Efficiency Stable. Athlete is primed for max velocity output.")
-else:
-st.info("Provide at least 1 historical entry to populate tracking vectors.")
+    st.title("📈 Athlete Performance Trajectory Deep Dive")
+    selected_athlete = st.selectbox("Select Athlete Profile:", st.session_state.athletes['name'].unique())
+    athlete_id = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete]['id'].values[0]
+    athlete_logs = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == athlete_id) & (st.session_state.workout_logs['type'] == "20m_fly")]
+    
+    if len(athlete_logs) >= 1:
+        athlete_logs = athlete_logs.sort_values(by="date")
+        # Plot time series chart using Plotly
+        fig = px.line(athlete_logs, x="date", y="fat", title="20m Fly FAT Progression Trend", markers=True)
+        fig.update_yaxes(autorange="reverse") # Faster means smaller numbers
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Check for Central Nervous System (CNS) Fatigue
+        if len(athlete_logs) >= 2:
+            last_two = athlete_logs.tail(2)['fat'].values
+            decay_percent = ((last_two[1] - last_two[0]) / last_two[0]) * 100
+            if decay_percent > 4.0:
+                st.warning(f"⚠️ CNS Fatigue Advisory Warning Alert: Velocity dropped by {round(decay_percent,1)}% on last rep. Advise immediate recovery down-regulation.")
+            else:
+                st.success("🟢 CNS Efficiency Stable. Athlete is primed for max velocity output.")
+    else:
+        st.info("Provide at least 1 historical entry to populate tracking vectors.")
 
-==========================================
-MODULE 5: 4x100M RELAY BUILDER
-==========================================
+# ==========================================
+# MODULE 5: 4x100M RELAY BUILDER
+# ==========================================
 elif app_mode == "🤝 4x100m Relay Builder":
-st.title("🤝 4x100m Data-Driven Relay Exchange Module")
-st.info("This system uses the Kinetic Cross-Over formula to accurately map heel-to-heel steps.")
-col1, col2 = st.columns(2)
-with col1:
-st.subheader("📥 Incoming Runner (Max Velocity Flying Anchor)")
-inc_athlete = st.selectbox("Select Incoming Runner:", st.session_state.athletes['name'].unique(), key="inc")
-inc_id = st.session_state.athletes[st.session_state.athletes['name'] == inc_athlete]['id'].values[0]
-# Fallback default if no history exists yet
-inc_fly = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == inc_id) & (st.session_state.workout_logs['type'] == "20m_fly")]['fat'].min()
-inc_fly = st.number_input("Incoming 20m Fly (s)", value=float(inc_fly) if not pd.isna(inc_fly) else 2.30)
-with col2:
-st.subheader("🛫 Outgoing Runner (Block Acceleration Drive)")
-out_athlete = st.selectbox("Select Outgoing Runner:", st.session_state.athletes['name'].unique(), key="out")
-out_id = st.session_state.athletes[st.session_state.athletes['name'] == out_athlete]['id'].values[0]
-out_block = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == out_id) & (st.session_state.workout_logs['type'] == "30m_block")]['fat'].min()
-out_block = st.number_input("Outgoing 30m Block (s)", value=float(out_block) if not pd.isna(out_block) else 4.40)
-st.write("---")
-go_mark_steps = calculate_relay_go_mark(inc_fly, out_block)
-st.metric(label="🎯 TARGET ACCELERATION GO MARK ENGINE", value=f"{go_mark_steps} Steps")
-st.markdown(f"""
-Deployment Execution Instructions:
-1. Stand exactly on the international Acceleration Line (the apex point of the zone triangle).
-2. Turn around and walk backward toward the starting line blocks.
-3. Count out exactly {go_mark_steps} heel-to-heel footsteps.
-4. Place coaching tape at that location. When the incoming runner crosses the tape, the outgoing runner hits 100% full-throttle acceleration.
-""")
+    st.title("🤝 4x100m Data-Driven Relay Exchange Module")
+    st.info("This system uses the Kinetic Cross-Over formula to accurately map heel-to-heel steps.")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📥 Incoming Runner (Max Velocity Flying Anchor)")
+        inc_athlete = st.selectbox("Select Incoming Runner:", st.session_state.athletes['name'].unique(), key="inc")
+        inc_id = st.session_state.athletes[st.session_state.athletes['name'] == inc_athlete]['id'].values[0]
+        # Fallback default if no history exists yet
+        inc_fly = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == inc_id) & (st.session_state.workout_logs['type'] == "20m_fly")]['fat'].min()
+        inc_fly = st.number_input("Incoming 20m Fly (s)", value=float(inc_fly) if not pd.isna(inc_fly) else 2.30)
+        
+    with col2:
+        st.subheader("🛫 Outgoing Runner (Block Acceleration Drive)")
+        out_athlete = st.selectbox("Select Outgoing Runner:", st.session_state.athletes['name'].unique(), key="out")
+        out_id = st.session_state.athletes[st.session_state.athletes['name'] == out_athlete]['id'].values[0]
+        out_block = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == out_id) & (st.session_state.workout_logs['type'] == "30m_block")]['fat'].min()
+        out_block = st.number_input("Outgoing 30m Block (s)", value=float(out_block) if not pd.isna(out_block) else 4.40)
+        
+    st.write("---")
+    go_mark_steps = calculate_relay_go_mark(inc_fly, out_block)
+    st.metric(label="🎯 TARGET ACCELERATION GO MARK ENGINE", value=f"{go_mark_steps} Steps")
+    st.markdown(f"""
+    Deployment Execution Instructions:
+    1. Stand exactly on the international Acceleration Line (the apex point of the zone triangle).
+    2. Turn around and walk backward toward the starting line blocks.
+    3. Count out exactly {go_mark_steps} heel-to-heel footsteps.
+    4. Place coaching tape at that location. When the incoming runner crosses the tape, the outgoing runner hits 100% full-throttle acceleration.
+    """)
 
-==========================================
-MODULE 6: AD REPORT GENERATOR
-==========================================
+# ==========================================
+# MODULE 6: AD REPORT GENERATOR
+# ==========================================
 elif app_mode == "📄 AD Report Generator":
-st.title("📄 Performance Portfolio Export Module")
-st.write("Generate high-contrast, administrative-ready print layouts for Athletic Directors and Program Scouters.")
-report_html = f"""
+    st.title("📄 Performance Portfolio Export Module")
+    st.write("Generate high-contrast, administrative-ready print layouts for Athletic Directors and Program Scouters.")
+    report_html = f"""
+    ⚡ RDZ SPEED DEVELOPMENT SYSTEM REPORT
+    Generated: {datetime.today().strftime('%B %d, %Y')} | Program Classification: High School Track & Field
 
-⚡ RDZ SPEED DEVELOPMENT SYSTEM REPORT
-Generated: {datetime.today().strftime('%B %d, %Y')} | Program Classification: High School Track & Field
+    📋 ACTIVE PROGRAM ROSTER DATA ROSTER SUMMARY
+    Total Tracked Sprinters: {len(st.session_state.athletes)} Active Athletes
+    Primary Metric Target Matrix Focus: 20m Flying Sprints & 30m Stationary Blocks
 
-📋 ACTIVE PROGRAM ROSTER DATA ROSTER SUMMARY
-Total Tracked Sprinters: {len(st.session_state.athletes)} Active Athletes
-Primary Metric Target Matrix Focus: 20m Flying Sprints & 30m Stationary Blocks
+    📈 TOP TEAM VELOCITY PERFORMERS
+    Marcus Anderson (Jr.) - 1.98s Converted FAT Fly | Projected 100m: 10.95s
+    Elena Martinez (Jr.) - 2.45s Converted FAT Fly | Projected 100m: 12.80s
 
-📈 TOP TEAM VELOCITY PERFORMERS
-
-Marcus Anderson (Jr.) - 1.98s Converted FAT Fly | Projected 100m: 10.95s
-Elena Martinez (Jr.) - 2.45s Converted FAT Fly | Projected 100m: 12.80s
-
-
-
-Verified Authentic via RDZ Speed Development Analytics Database Engine
-
-"""
-st.markdown(report_html, unsafe_html=True)
-st.write("---")
-st.download_button("📥 Export Report to Print Ledger System", data=report_html, file_name="rdz_speed_report.html", mime="text/html")
+    Verified Authentic via RDZ Speed Development Analytics Database Engine
+    """
+    st.markdown(report_html, unsafe_html=True)
+    st.write("---")
+    st.download_button("📥 Export Report to Print Ledger System", data=report_html, file_name="rdz_speed_report.html", mime="text/html")
