@@ -104,11 +104,12 @@ if app_mode == "👥 Roster & Onboarding":
         st.info("Have your athletes scan this or use the code below during team check-ins.")
         st.code("RDZ-NORTHSIDE-2026", language="text")
         
-        # --- GENERATE AND DISPLAY THE MISSING QR CODE ---
+        # --- GENERATE AND DISPLAY THE LIVE QR CODE ---
         import qrcode
         import io
         
-        qr_payload_data = "RDZ-SPEED-ONBOARDING:RDZ-NORTHSIDE-2026" 
+        # Define the internet URL destination first so the generator embeds it
+        qr_payload_data = "https://rdz-speed-2-g2pwbuoyifkmg3bqjxlqd3.streamlit.app"
         
         qr = qrcode.QRCode(version=1, box_size=10, border=2)
         qr.add_data(qr_payload_data)
@@ -121,7 +122,7 @@ if app_mode == "👥 Roster & Onboarding":
         
         st.success("🤖 Active QR Code Payload Generated")
         st.image(byte_im, caption="Scan with smartphone camera to check-in", use_container_width=True)
-        qr_payload_data = "https://streamlit.app"
+        # ---------------------------------------------
         
         st.write("---")
         st.subheader("➕ Quick Add Athlete")
