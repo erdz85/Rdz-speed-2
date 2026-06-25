@@ -26,7 +26,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
 # ==========================================
 # 2. STATE MANAGER & PERSISTENT STORAGE
 # ==========================================
@@ -49,7 +48,6 @@ if "workout_logs" not in st.session_state:
         {"date": "2026-03-01", "athlete_id": "A3", "type": "30m_block", "fat": 4.60},
         {"date": "2026-03-01", "athlete_id": "A4", "type": "30m_block", "fat": 4.55}
     ])
-
 
 # ==========================================
 # 3. ATHLETE SELF-REGISTRATION LAYER (QR INTERCEPT)
@@ -74,7 +72,6 @@ if "view" in st.query_params and st.query_params["view"] == "register":
     # Completely stops the layout generation here so athletes NEVER see coach settings
     st.stop()
 
-
 # ==========================================
 # 4. HELPER FUNCTIONS
 # ==========================================
@@ -86,7 +83,6 @@ def calculate_relay_go_mark(inc_fly, out_block):
     except:
         return 12.0
 
-
 # ==========================================
 # 5. SIDEBAR NAVIGATION PANEL (COACH VIEW)
 # ==========================================
@@ -97,7 +93,6 @@ app_mode = st.sidebar.radio(
     "Go To Module Portal:",
     ["👥 Roster & Onboarding", "📈 Athlete Progress", "🤝 4x100m Relay Builder", "📄 AD Report Generator"]
 )
-
 
 # ==========================================
 # MODULE 1: ROSTER MANAGEMENT & ONBOARDING
@@ -113,6 +108,7 @@ if app_mode == "👥 Roster & Onboarding":
         st.code("RDZ-NORTHSIDE-2026", language="text")
         
         # --- GENERATE LINK WITH FLAG INCLUDED ---
+        # Using your dedicated application domain with the athlete query flag attached
         qr_payload_data = "https://streamlit.app"
         
         qr = qrcode.QRCode(version=1, box_size=10, border=2)
