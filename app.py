@@ -22,8 +22,7 @@ st.markdown("""
     .badge-hot { background-color: #e67e22; color: white; font-weight: bold; padding: 3px 8px; border-radius: 5px; }
     .badge-pr { background-color: #2ecc71; color: white; font-weight: bold; padding: 3px 8px; border-radius: 5px; }
 </style>
-""", unsafe_ Ultraviolet=True)
-
+""", unsafe_allow_html=True)
 # ==========================================
 # 2. SEEDING IN-MEMORY SESSION STATE DATA
 # ==========================================
