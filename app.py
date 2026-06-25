@@ -99,11 +99,29 @@ if app_mode == "👥 Roster & Onboarding":
     
     col1, col2 = st.columns([1, 2])
     
-    with col1:
+        with col1:
         st.subheader("🔗 Share Team Access")
         st.info("Have your athletes scan this or use the code below during team check-ins.")
         st.code("RDZ-NORTHSIDE-2026", language="text")
+        
+        # --- GENERATE AND DISPLAY THE MISSING QR CODE ---
+        import qrcode
+        import io
+        
+        qr_payload_data = "RDZ-SPEED-ONBOARDING:RDZ-NORTHSIDE-2026" 
+        
+        qr = qrcode.QRCode(version=1, box_size=10, border=2)
+        qr.add_data(qr_payload_data)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        byte_im = buf.getvalue()
+        
         st.success("🤖 Active QR Code Payload Generated")
+        st.image(byte_im, caption="Scan with smartphone camera to check-in", use_container_width=True)
+        # ------------------------------------------------
         
         st.write("---")
         st.subheader("➕ Quick Add Athlete")
@@ -126,6 +144,7 @@ if app_mode == "👥 Roster & Onboarding":
         
         if st.button("⚠️ Run End-of-Season Roster Rollover"):
             st.warning("This archives seniors and increments all grades by one year.")
+
 
 # ==========================================
 # MODULE 2: WORKOUT TRACKER
