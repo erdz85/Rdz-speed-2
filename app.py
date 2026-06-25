@@ -121,7 +121,7 @@ if app_mode == "👥 Roster & Onboarding":
         
         st.success("🤖 Active QR Code Payload Generated")
         st.image(byte_im, caption="Scan with smartphone camera to check-in", use_container_width=True)
-        # ------------------------------------------------
+        qr_payload_data = "https://streamlit.app"
         
         st.write("---")
         st.subheader("➕ Quick Add Athlete")
