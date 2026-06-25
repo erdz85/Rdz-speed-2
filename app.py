@@ -102,13 +102,12 @@ if app_mode == "👥 Roster & Onboarding":
     
     col1, col2 = st.columns([1, 1.5])
     
-        with col1:
+    with col1:
         st.subheader("🔗 Share Team Access")
         st.info("Have your athletes scan this or use the code below during team check-ins.")
         st.code("RDZ-NORTHSIDE-2026", language="text")
         
         # --- GENERATE LINK WITH FLAG INCLUDED ---
-        # FIXED: Changed from generic homepage to your active app link with the registration flag
         qr_payload_data = "https://streamlit.app"
         
         qr = qrcode.QRCode(version=1, box_size=10, border=2)
