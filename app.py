@@ -99,7 +99,7 @@ if app_mode == "👥 Roster & Onboarding":
     
     col1, col2 = st.columns([1, 2])
     
-        with col1:
+with col1:
         st.subheader("🔗 Share Team Access")
         st.info("Have your athletes scan this or use the code below during team check-ins.")
         st.code("RDZ-NORTHSIDE-2026", language="text")
