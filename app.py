@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import math
 import plotly.express as px
+import qrcode
+import io
 from datetime import datetime
 
 # ==========================================
@@ -23,93 +25,95 @@ st.markdown("""
     .badge-pr { background-color: #2ecc71; color: white; font-weight: bold; padding: 3px 8px; border-radius: 5px; }
 </style>
 """, unsafe_allow_html=True)
+
+
 # ==========================================
-# 2. SEEDING IN-MEMORY SESSION STATE DATA
+# 2. STATE MANAGER & PERSISTENT STORAGE
 # ==========================================
-# Streamlit uses session_state to mock a real database across app reloads
-if 'athletes' not in st.session_state:
+if "athletes" not in st.session_state:
     st.session_state.athletes = pd.DataFrame([
         {"id": "A1", "name": "Marcus Anderson", "gender": "Male", "group": "Short Sprints", "grade": "Junior"},
         {"id": "A2", "name": "Trey Williams", "gender": "Male", "group": "Short Sprints", "grade": "Senior"},
         {"id": "A3", "name": "Elena Martinez", "gender": "Female", "group": "Short Sprints", "grade": "Junior"},
-        {"id": "A4", "name": "Jordan Davis", "gender": "Female", "group": "Short Sprints", "grade": "Freshman"},
+        {"id": "A4", "name": "Jordan Davis", "gender": "Female", "group": "Short Sprints", "grade": "Freshman"}
     ])
 
-if 'workout_logs' not in st.session_state:
+if "workout_logs" not in st.session_state:
     st.session_state.workout_logs = pd.DataFrame([
-        {"log_id": 1, "date": "2026-05-01", "athlete_id": "A1", "type": "20m_fly", "raw": 2.10, "fat": 2.10, "proj_100": 11.50},
-        {"log_id": 2, "date": "2026-05-15", "athlete_id": "A1", "type": "20m_fly", "raw": 1.98, "fat": 1.98, "proj_100": 10.95},
-        {"log_id": 3, "date": "2026-05-01", "athlete_id": "A3", "type": "20m_fly", "raw": 2.45, "fat": 2.65, "proj_100": 13.58},
-        {"log_id": 4, "date": "2026-05-15", "athlete_id": "A3", "type": "20m_fly", "raw": 2.30, "fat": 2.45, "proj_100": 12.80},
-        {"log_id": 5, "date": "2026-05-15", "athlete_id": "A2", "type": "30m_block", "raw": 4.15, "fat": 4.15, "proj_100": 11.25},
-        {"log_id": 6, "date": "2026-05-15", "athlete_id": "A4", "type": "30m_block", "raw": 4.40, "fat": 4.40, "proj_100": 12.10},
+        {"date": "2026-03-01", "athlete_id": "A1", "type": "20m_fly", "fat": 2.05},
+        {"date": "2026-03-10", "athlete_id": "A1", "type": "20m_fly", "fat": 1.98},
+        {"date": "2026-03-01", "athlete_id": "A3", "type": "20m_fly", "fat": 2.52},
+        {"date": "2026-03-10", "athlete_id": "A3", "type": "20m_fly", "fat": 2.45},
+        {"date": "2026-03-01", "athlete_id": "A1", "type": "30m_block", "fat": 4.10},
+        {"date": "2026-03-01", "athlete_id": "A2", "type": "30m_block", "fat": 4.25},
+        {"date": "2026-03-01", "athlete_id": "A3", "type": "30m_block", "fat": 4.60},
+        {"date": "2026-03-01", "athlete_id": "A4", "type": "30m_block", "fat": 4.55}
     ])
 
-# ==========================================
-# 3. MATHEMATICAL ALGORITHM ENGINES
-# ==========================================
-def normalize_hand_fly(raw_hand_time):
-    """Applies the NFHS rounding rule and Max Velocity Anticipation Constant."""
-    rounded_time = math.ceil(raw_hand_time * 10) / 10.0
-    return round(rounded_time + 0.15, 2)
 
-def calculate_projected_100m(thirty_block, twenty_fly, gender):
-    """Piecewise Splicing Model with performance decay scaling."""
-    ten_split = twenty_fly / 2.0
-    base_time = thirty_block + (7.0 * ten_split)
+# ==========================================
+# 3. ATHLETE SELF-REGISTRATION LAYER (QR INTERCEPT)
+# ==========================================
+if "view" in st.query_params and st.query_params["view"] == "register":
+    st.title("🏃 New Athlete Registration Portal")
+    st.info("Welcome to RDZ Speed. Enter your details below to join the active training roster.")
     
-    if gender.lower() == "male":
-        decay = 0.12 if base_time < 11.0 else 0.18
-    else:
-        decay = 0.15 if base_time < 12.2 else 0.25
+    with st.form("athlete_self_register", clear_on_submit=True):
+        new_name = st.text_input("First & Last Name")
+        new_gender = st.selectbox("Gender", ["Male", "Female"])
+        new_group = st.selectbox("Training Group", ["Short Sprints", "Long Sprints", "Hurdlers"])
+        new_grade = st.selectbox("Grade", ["Freshman", "Sophomore", "Junior", "Senior"])
+        submit_btn = st.form_submit_button("Submit Registration")
         
-    return round(base_time + decay, 2)
+        if submit_btn and new_name:
+            new_id = f"A{len(st.session_state.athletes) + 1}"
+            new_row = {"id": new_id, "name": new_name, "gender": new_gender, "group": new_group, "grade": new_grade}
+            st.session_state.athletes = pd.concat([st.session_state.athletes, pd.DataFrame([new_row])], ignore_index=True)
+            st.success(f"🎉 Welcome {new_name}! You are registered. You can close this tab now.")
+            
+    # Completely stops the layout generation here so athletes NEVER see coach settings
+    st.stop()
 
-def calculate_relay_go_mark(incoming_fly, outgoing_block):
-    """Calculates the differential closing gap converted into heel-to-heel steps."""
-    v_incoming = 20.0 / incoming_fly
-    t_acceleration = outgoing_block * 0.71
-    raw_distance_gap = (v_incoming * t_acceleration) - 20.0
-    final_distance_meters = raw_distance_gap - 0.70  # Arm extension buffer
-    coaching_steps = final_distance_meters * 3.28    # Heel-to-heel factor
-    return max(0.0, round(coaching_steps, 1))
 
 # ==========================================
-# 4. APP NAVIGATION & LAYOUT SIDEBAR
+# 4. HELPER FUNCTIONS
 # ==========================================
-st.sidebar.title("⚡ RDZ Speed")
-st.sidebar.subheader("Development Engine")
-app_mode = st.sidebar.radio("Go To Module:", [
-    "👥 Roster & Onboarding",
-    "⏱️ Workout Tracker",
-    "🔥 Team Leaderboard",
-    "📈 Athlete Progress",
-    "🤝 4x100m Relay Builder",
-    "📄 AD Report Generator"
-])
+def calculate_relay_go_mark(inc_fly, out_block):
+    # Kinetic Cross-Over Formula Simulator
+    try:
+        raw_mark = (float(out_block) - float(inc_fly)) * 7.5
+        return max(1, round(raw_mark, 1))
+    except:
+        return 12.0
 
+
+# ==========================================
+# 5. SIDEBAR NAVIGATION PANEL (COACH VIEW)
+# ==========================================
+st.sidebar.title("⚡ RDZ Speed System")
+st.sidebar.write("Program Classification: HS Track")
 st.sidebar.write("---")
-st.sidebar.info("⚙️ Core Database Running via In-Memory Sandbox Mode.")
+app_mode = st.sidebar.radio(
+    "Go To Module Portal:",
+    ["👥 Roster & Onboarding", "📈 Athlete Progress", "🤝 4x100m Relay Builder", "📄 AD Report Generator"]
+)
+
 
 # ==========================================
-# MODULE 1: ROSTER & ONBOARDING
+# MODULE 1: ROSTER MANAGEMENT & ONBOARDING
 # ==========================================
 if app_mode == "👥 Roster & Onboarding":
     st.title("👥 Roster Management & Athlete Onboarding")
     
-    col1, col2 = st.columns([1, 2])
+    col1, col2 = st.columns([1, 1.5])
     
     with col1:
         st.subheader("🔗 Share Team Access")
         st.info("Have your athletes scan this or use the code below during team check-ins.")
         st.code("RDZ-NORTHSIDE-2026", language="text")
         
-        # --- GENERATE AND DISPLAY THE LIVE QR CODE ---
-        import qrcode
-        import io
-        
-        # Define the internet URL destination first so the generator embeds it
-        qr_payload_data = "https://rdz-speed-2-g2pwbuoyifkmg3bqjxlqd3.streamlit.app"
+        # --- GENERATE LINK WITH FLAG INCLUDED ---
+        qr_payload_data = "https://streamlit.app"
         
         qr = qrcode.QRCode(version=1, box_size=10, border=2)
         qr.add_data(qr_payload_data)
@@ -122,7 +126,6 @@ if app_mode == "👥 Roster & Onboarding":
         
         st.success("🤖 Active QR Code Payload Generated")
         st.image(byte_im, caption="Scan with smartphone camera to check-in", use_container_width=True)
-        # ---------------------------------------------
         
         st.write("---")
         st.subheader("➕ Quick Add Athlete")
