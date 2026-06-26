@@ -1124,7 +1124,7 @@ elif app_portal == "⏱️ Workout Tracker":
 # ==========================================
 elif app_portal == "📆 Live Session Dashboard":
     st.title("📆 Today's Live Session Dashboard")
-    st.markdown("Real-time view of sprints captured during today's training session.")
+    st.markdown("Real-time tracking matrix of sprints and calculated projections captured during today's training session.")
 
     # --- SAFE DATA RETRIEVAL ENGINE ---
     if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
@@ -1160,6 +1160,8 @@ elif app_portal == "📆 Live Session Dashboard":
                 name_candidates = [c for c in roster_clean.columns if 'name' in c]
                 name_key = name_candidates[0] if name_candidates else roster_clean.columns[1]
             
+            gender_key = 'gender' if 'gender' in roster_clean.columns else ('sex' if 'sex' in roster_clean.columns else None)
+            
             # 3. Clean type formats to match strings exactly (Eliminates numeric vs text merge drops)
             todays_logs['athlete_id'] = todays_logs['athlete_id'].astype(str).str.strip()
             roster_clean[right_key] = roster_clean[right_key].astype(str).str.strip()
@@ -1171,19 +1173,80 @@ elif app_portal == "📆 Live Session Dashboard":
             # 4. Complete the DataFrame merge flawlessly
             display_today = todays_logs.merge(roster_clean, left_on='athlete_id', right_on=right_key, how='left')
             
-            # Sort with newest entries showing up at the top of the feed
+            # ==========================================
+            # SECTION A: COMPILED SESSION MATRIX TRACKER
+            # ==========================================
+            st.subheader("🏁 Compiled Today's Best Summary Matrix")
+            st.markdown("The best recorded performance metrics per athlete captured during today's workspace window.")
+            
+            # Generate the aggregated top values for today's logs specifically
+            session_fly = todays_logs[todays_logs['type'] == '20m_fly'].groupby('athlete_id')[fat_col].min().to_dict()
+            session_block = todays_logs[todays_logs['type'] == '30m_block'].groupby('athlete_id')[fat_col].min().to_dict()
+            
+            # Filter roster down to only athletes who have run today
+            athletes_active_today = roster_clean[roster_clean[right_key].isin(todays_logs['athlete_id'].unique())]
+            
+            # Grid Table Headers
+            h1, h2, h3, h4 = st.columns([3, 2, 2, 3])
+            with h1: st.markdown("👤 **Athlete Full Name**")
+            with h2: st.markdown("⚡ **Best 20m Fly Today**")
+            with h3: st.markdown("🧱 **Best 30m Block Today**")
+            with h4: st.markdown("🎯 **Session Proj. 100m**")
+            st.markdown("<hr style='margin: 0px 0px 12px 0px; border-color: #555;' />", unsafe_allow_html=True)
+            
+            for _, athlete in athletes_active_today.iterrows():
+                a_id = str(athlete[right_key]).strip()
+                a_name = athlete[name_key]
+                a_gender = str(athlete[gender_key]).lower() if gender_key and pd.notna(athlete[gender_key]) else 'male'
+                
+                # Pull metrics out safely
+                best_fly = session_fly.get(a_id, None)
+                best_block = session_block.get(a_id, None)
+                
+                fly_str = f"{best_fly:.2f}s" if best_fly else "--"
+                block_str = f"{best_block:.2f}s" if best_block else "--"
+                
+                # --- GENDER SPECIFIC KINEMATIC PROJECTION SYSTEM ---
+                # Fallbacks run if they only performed one type of drill profile today
+                calc_fly = best_fly if best_fly else (best_block / 1.95 if best_block else None)
+                calc_block = best_block if best_block else (best_fly * 1.95 if best_fly else None)
+                
+                if calc_fly and calc_block:
+                    if 'calculate_projected_100m' in globals():
+                        proj_val = calculate_projected_100m(calc_block, calc_fly, a_gender)
+                    else:
+                        # Dynamic mathematical system formula if globals are unmapped
+                        if 'female' in a_gender:
+                            proj_val = (calc_fly * 5.10) + (calc_block * 0.25) + 1.40
+                        else:
+                            proj_val = (calc_fly * 4.95) + (calc_block * 0.22) + 1.20
+                    proj_str = f"**{proj_val:.2f}s**"
+                else:
+                    proj_str = "--"
+                    
+                # Render Row Elements Matrix
+                r1, r2, r3, r4 = st.columns([3, 2, 2, 3])
+                with r1: st.markdown(f"**{a_name}**")
+                with r2: st.markdown(f"<span style='color:#FF4B4B;'>{fly_str}</span>", unsafe_allow_html=True)
+                with r3: st.markdown(f"<span style='color:#00E676;'>{block_str}</span>", unsafe_allow_html=True)
+                with r4: st.markdown(f"<span style='color:#00B0FF;'>{proj_str}</span>", unsafe_allow_html=True)
+                st.write("---")
+
+            # ==========================================
+            # SECTION B: LIVE REPETITION ACTIVITY LOGS STREAM
+            # ==========================================
+            st.write("")
+            st.subheader("📊 Live Activity Repetition Feed Stream")
+            
+            # Sort with newest entries showing up at the top of the feed layout
             if 'log_id' in display_today.columns:
                 display_today = display_today.sort_values(by='log_id', ascending=False)
-
-            # --- UI FEED RENDER LOOP ---
-            st.subheader(f"📊 Active Session Feed — {len(display_today)} Sprints Logged")
             
             for idx, row in display_today.iterrows():
                 athlete_display_name = row[name_key] if pd.notna(row[name_key]) else f"Athlete #{row['athlete_id']}"
                 drill_label = "⚡ 20m Fly" if row['type'] == "20m_fly" else "🧱 30m Block Start"
                 group_label = f"({row['group']})" if 'group' in row and pd.notna(row['group']) else ""
                 
-                # Render clean activity card streams
                 with st.container(border=True):
                     v1, v2, v3 = st.columns([4, 3, 2])
                     with v1:
@@ -1192,6 +1255,6 @@ elif app_portal == "📆 Live Session Dashboard":
                     with v2:
                         st.markdown(f"### **{row[fat_col]:.2f}s FAT**")
                     with v3:
-                        st.write("") # Vertical offset balance spacer
+                        st.write("") 
                         if 'proj_100' in row and pd.notna(row['proj_100']):
-                            st.markdown(f"🎯 *Proj 100m: {row['proj_100']:.2f}s*")
+                            st.markdown(f"🎯 *Rep Proj: {row['proj_100']:.2f}s*")
