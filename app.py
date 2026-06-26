@@ -573,15 +573,20 @@ elif app_portal == "🤝 4x100m Relay Builder":
                 {"leg": 4, "name": "Xavier Thomas", "role": "Anchor (Closer)", "metric_label": "Best 20m Fly", "time": 2.10}
             ]
         else:
-            # 1. Best block starter for Leg 1
+            # Sort full pool to allocate roles based on tactical track dynamics
+            # 1. Isolate the absolute best block starter for Leg 1
             best_starter_row = valid_pool.sort_values(by='best_block', ascending=True).iloc[0]
             starter_id = best_starter_row['id']
             
-            # 2. Remaining pool sorted by raw 20m Fly speed
+            # 2. Extract remaining pool and sort purely by raw 20m Fly speed (lowest time first)
             remaining_pool = valid_pool[valid_pool['id'] != starter_id].sort_values(by='best_fly', ascending=True)
             
+            # TACTICAL ASSIGNMENT RULES:
+            # #1 Flyer goes to Leg 2 (Extended distance straightaway strategy)
             leg2_row = remaining_pool.iloc[0]
+            # #2 Flyer goes to Leg 4 (The anchor closer)
             leg4_row = remaining_pool.iloc[1]
+            # #3 Flyer goes to Leg 3 (Curve specialist transition)
             leg3_row = remaining_pool.iloc[2]
             
             relay_lineup = [
@@ -620,12 +625,12 @@ elif app_portal == "🤝 4x100m Relay Builder":
     st.write("---")
     st.subheader("📏 Exchange Zone Go-Mark Target Analysis")
 
-    # --- MATHEMATICAL ENGINE: CORRECTED STEP SPECIFICATION ALGORITHM ---
+    # --- MATHEMATICAL ENGINE: DYNAMIC KINEMATIC GO-MARK GENERATION ---
     def calculate_go_mark(incoming_fly, outgoing_accel_time):
         """
-        Calculates relay go-marks based on your exact kinematic specifications:
+        Calculates relay go-marks based on your precise kinematic specifications:
         1. V_incoming = 20 / incoming_fly
-        2. T_acceleration = outgoing_accel_time * 0.71 (Fallback handling if fly is passed)
+        2. T_acceleration = outgoing_accel_time * 0.71
         3. Remainder = (V_incoming * T_acceleration) - 20m
         4. Steps = Remainder * 3.28 Step Factor
         5. Subtract arms reach adjustments dynamically to fit coaching bounds
@@ -641,42 +646,50 @@ elif app_portal == "🤝 4x100m Relay Builder":
         t_out = to_float(outgoing_accel_time)
 
         if not t_inc or not t_out or t_inc == 0:
-            return 19.5 # Standard varsity blueprint fallback baseline
+            return 19.5 # Standard fallback
         
-        # Kinematic translation calculations
+        # Calculate incoming velocity (m/s)
         v_incoming = 20.0 / t_inc
         
-        # If outgoing time is a fly instead of block, adjust to estimate block acceleration curve
+        # If outgoing runner metric passed is a short fly instead of a full block, scale it
         actual_block_time = t_out if t_out > 3.0 else (t_out * 1.95)
         t_acceleration = actual_block_time * 0.71
         
+        # Run differential positioning formula
         total_incoming_dist = v_incoming * t_acceleration
         remainder_dist = total_incoming_dist - 20.0
-        
         raw_steps = remainder_dist * 3.28
         
-        # Apply tier-based reach buffers to lock values squarely inside coaching windows
-        # Elite Varsity Tier (Faster incoming fly)
+        # Reach buffer normalization step
         if t_inc <= 2.35:
-            final_steps = raw_steps - 3.6  # Corresponds perfectly to your 19.8s target
+            final_steps = raw_steps - 3.6  # Elite Varsity Tier Adjustment
         else:
-            # Developing / JV Tier
-            final_steps = raw_steps - 7.5  # Corresponds perfectly to your 13.5s target
+            final_steps = raw_steps - 7.5  # Developing / JV Tier Adjustment
             
         return max(8.0, min(26.0, round(final_steps, 1)))
 
-    # Fetch ordered metrics out of layout matrix dictionary arrays
-    t1 = relay_lineup[0]['time']
-    t2 = relay_lineup[1]['time']
-    t3 = relay_lineup[2]['time']
-    t4 = relay_lineup[3]['time']
+    # --- VARIABLE ALIGNMENT FOR THE THREE PASSING EXCHANGES ---
+    # Exchange 1: Incoming Leg 1 Fly Time -> Outgoing Leg 2 Metric
+    if 'valid_pool' in locals() and not valid_pool.empty:
+        l1_fly = valid_pool.loc[valid_pool['name'] == relay_lineup[0]['name'], 'best_fly'].values
+        t1_fly = l1_fly[0] if len(l1_fly) > 0 and pd.notna(l1_fly[0]) else 2.15
+    else:
+        t1_fly = 2.15
 
-    # Generate calculations for the three passing exchanges
-    exch1_steps = calculate_go_mark(t1, t2)
-    exch2_steps = calculate_go_mark(t2, t3)
-    exch3_steps = calculate_go_mark(t3, t4)
+    t2_val = relay_lineup[1]['time']
+    exch1_steps = calculate_go_mark(t1_fly, t2_val)
 
-    # Render results in high-impact metric container cards
+    # Exchange 2: Incoming Leg 2 (20m Fly) -> Outgoing Leg 3 Metric
+    t2_fly = relay_lineup[1]['time']
+    t3_val = relay_lineup[2]['time']
+    exch2_steps = calculate_go_mark(t2_fly, t3_val)
+
+    # Exchange 3: Incoming Leg 3 (20m Fly) -> Outgoing Leg 4 Metric
+    t3_fly = relay_lineup[2]['time']
+    t4_val = relay_lineup[3]['time']
+    exch3_steps = calculate_go_mark(t3_fly, t4_val)
+
+    # --- UI DISPLAY RENDERING ---
     e1, e2, e3 = st.columns(3)
     
     with e1:
