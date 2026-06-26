@@ -171,7 +171,7 @@ elif app_mode == "📈 Athlete Progress":
     if len(athlete_logs) >= 1:
         athlete_logs = athlete_logs.sort_values(by="date")
         fig = px.line(athlete_logs, x="date", y="fat", title="20m Fly FAT Progression Trend", markers=True)
-        fig.update_yaxes(autorange="reverse")
+        fig.update_yaxes(autorange="reversed")
         st.plotly_chart(fig, use_container_width=True)
         
         if len(athlete_logs) >= 2:
