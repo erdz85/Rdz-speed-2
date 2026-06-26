@@ -303,140 +303,81 @@ elif app_portal == "🏋️ Workout Logger":
     session_metric = st.selectbox("Active Testing Drill Vector Type:", ["20m_fly", "30m_block"])
 
 # ==========================================
-# MODULE: LIVE SPRINT REPETITION ENTRY TRACKER
+# MODULE: LIVE SESSION DASHBOARD
 # ==========================================
-elif app_portal == "⏱️ Workout Tracker":  # Integrates directly into your tracker tab layout
-    st.title("⏱️ Live Sprint Repetition Entry Tracker")
-    st.markdown("Log active sprint intervals while referencing baseline performance records side-by-side.")
-    
-    # 1. Configuration Controls
-    col_sys, col_drill = st.columns(2)
-    with col_sys:
-        timing_system = st.radio("Timing System Method:", ["Electronic / FAT (Freelap)", "Hand-Timed (Stopwatch)"], horizontal=True)
-    with col_drill:
-        session_type = st.selectbox("Active Drill Profile Type:", ["20m_fly", "30m_block"])
-        
-    st.write("---")
-    
-    # 2. Guard Rails: Verify Core Data Structures Exist
-    if 'athletes' not in st.session_state or st.session_state.athletes.empty:
-        st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
+elif app_portal == "📆 Live Session Dashboard":
+    st.title("📆 Today's Live Session Dashboard")
+    st.markdown("Real-time view of sprints captured during today's training session.")
+
+    # --- SAFE DATA RETRIEVAL ENGINE ---
+    if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
+        st.info("ℹ️ No workout logs recorded in the system yet. Sprints logged today will appear here.")
     else:
-        # Standardize Roster DataFrame
-        roster_view = st.session_state.athletes.copy()
-        roster_view.columns = [str(c).lower() for c in roster_view.columns]
+        from datetime import datetime
+        today_str = datetime.today().strftime('%Y-%m-%d')
         
-        id_key = 'id' if 'id' in roster_view.columns else roster_view.columns[0]
+        # 1. Standardize Workout Logs DataFrame
+        logs_clean = st.session_state.workout_logs.copy()
+        logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
         
-        if 'full_name' in roster_view.columns:
-            name_key = 'full_name'
-        elif 'name' in roster_view.columns:
-            name_key = 'name'
+        # Isolate today's data rows exclusively
+        todays_logs = logs_clean[logs_clean['date'] == today_str].copy()
+        
+        if todays_logs.empty:
+            st.info(f"ℹ️ No repetitions logged yet for today ({today_str}). Use the Tracker module to log splits.")
+        elif 'athletes' not in st.session_state or st.session_state.athletes.empty:
+            st.warning("⚠️ Roster database missing. Please ensure athletes are loaded in the Roster Hub.")
         else:
-            name_candidates = [c for c in roster_view.columns if 'name' in c]
-            name_key = name_candidates[0] if name_candidates else roster_view.columns[1]
+            # 2. Standardize Roster DataFrame
+            roster_clean = st.session_state.athletes.copy()
+            roster_clean.columns = [str(c).lower() for c in roster_clean.columns]
             
-        gender_key = 'gender' if 'gender' in roster_view.columns else ('sex' if 'sex' in roster_view.columns else None)
+            # Smart Key Resolution Systems
+            right_key = 'id' if 'id' in roster_clean.columns else ('athlete_id' if 'athlete_id' in roster_clean.columns else roster_clean.columns[0])
+            
+            if 'full_name' in roster_clean.columns:
+                name_key = 'full_name'
+            elif 'name' in roster_clean.columns:
+                name_key = 'name'
+            else:
+                name_candidates = [c for c in roster_clean.columns if 'name' in c]
+                name_key = name_candidates[0] if name_candidates else roster_clean.columns[1]
+            
+            # 3. Clean type formats to match strings exactly (Eliminates numeric vs text merge drops)
+            todays_logs['athlete_id'] = todays_logs['athlete_id'].astype(str).str.strip()
+            roster_clean[right_key] = roster_clean[right_key].astype(str).str.strip()
+            
+            # Force target column formatting to float metrics
+            fat_col = 'fat' if 'fat' in todays_logs.columns else todays_logs.columns[-2]
+            todays_logs[fat_col] = pd.to_numeric(todays_logs[fat_col], errors='coerce')
+            
+            # 4. Complete the DataFrame merge flawlessly
+            display_today = todays_logs.merge(roster_clean, left_on='athlete_id', right_on=right_key, how='left')
+            
+            # Sort with newest entries showing up at the top of the feed
+            if 'log_id' in display_today.columns:
+                display_today = display_today.sort_values(by='log_id', ascending=False)
 
-        # 3. Pull Dynamic Historical PR References to Build the Reference Matrix
-        if 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty:
-            logs = st.session_state.workout_logs.copy()
-            logs.columns = [str(c).lower() for c in logs.columns]
-            fat_col = 'fat' if 'fat' in logs.columns else ('raw' if 'raw' in logs.columns else logs.columns[-1])
-            logs[fat_col] = pd.to_numeric(logs[fat_col], errors='coerce')
-            type_col = 'type' if 'type' in logs.columns else ('session_type' if 'session_type' in logs.columns else None)
+            # --- UI FEED RENDER LOOP ---
+            st.subheader(f"📊 Active Session Feed — {len(display_today)} Sprints Logged")
             
-            fly_prs = logs[logs[type_col] == '20m_fly'].groupby('athlete_id')[fat_col].min().to_dict()
-            block_prs = logs[logs[type_col] == '30m_block'].groupby('athlete_id')[fat_col].min().to_dict()
-        else:
-            fly_prs = {}
-            block_prs = {}
-
-        # 4. Matrix Column Headers Layout
-        # Ratios [3, 2, 2, 3, 2] keep names and fields clean and scannable without wrapping
-        h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 3, 2])
-        with h1: st.markdown("🏃 **Athlete Name**")
-        with h2: st.markdown("⚡ **Best Fly**")
-        with h3: st.markdown("🧱 **Best Block**")
-        with h4: st.markdown("⏱️ **Enter Rep Time (s)**")
-        with h5: st.markdown("💾 **Action**")
-        st.markdown("<hr style='margin: 0px 0px 15px 0px; border-color: #444;' />", unsafe_allow_html=True)
-
-        # 5. Tracker Entry Row Generation Loop
-        for index, athlete in roster_view.iterrows():
-            raw_id = athlete[id_key]
-            string_id = str(raw_id).strip()
-            athlete_name = athlete[name_key]
-            athlete_gender = str(athlete[gender_key]).lower() if gender_key and pd.notna(athlete[gender_key]) else 'male'
-            
-            # Extract Personal Records
-            pr_fly = fly_prs.get(string_id, None)
-            pr_block = block_prs.get(string_id, None)
-            
-            str_fly = f"{pr_fly:.2f}s" if pr_fly and not pd.isna(pr_fly) else "--"
-            str_block = f"{pr_block:.2f}s" if pr_block and not pd.isna(pr_block) else "--"
-            
-            # Row Layout Realignment
-            c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 3, 2])
-            
-            with c1:
-                st.markdown(f"<div style='padding-top: 5px;'><b>{athlete_name}</b></div>", unsafe_allow_html=True)
-            with c2:
-                st.markdown(f"<div style='padding-top: 5px; color: #FF4B4B;'>⚡ {str_fly}</div>", unsafe_allow_html=True)
-            with c3:
-                st.markdown(f"<div style='padding-top: 5px; color: #00E676;'>🧱 {str_block}</div>", unsafe_allow_html=True)
-            with c4:
-                raw_time = st.number_input(
-                    label=f"Input for {string_id}",
-                    min_value=0.00,
-                    max_value=12.00,
-                    step=0.01,
-                    format="%.2f",
-                    key=f"rep_{string_id}",
-                    label_visibility="collapsed"
-                )
-            with c5:
-                if st.button("Log Rep", key=f"btn_{string_id}", use_container_width=True):
-                    if raw_time <= 0:
-                        st.error("⚠️ Enter time > 0")
-                    else:
-                        from datetime import datetime
-                        
-                        # Apply Hand-Timed Correction Factor
-                        fat_time = raw_time
-                        if timing_system == "Hand-Timed (Stopwatch)":
-                            if 'normalize_hand_fly' in globals():
-                                fat_time = normalize_hand_fly(raw_time)
-                            else:
-                                fat_time = raw_time + 0.24 # Standard athletic convention backup
-                        
-                        # Generate Performance Projections
-                        if 'calculate_projected_100m' in globals():
-                            proj = calculate_projected_100m(4.5, fat_time, athlete_gender) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete_gender)
-                        else:
-                            proj = (fat_time * 5.0) + 1.25 if session_type == "20m_fly" else (fat_time * 2.5) + 2.0
-                        
-                        # Compile Log Object
-                        new_log = {
-                            "log_id": len(st.session_state.workout_logs) + 1 if ('workout_logs' in st.session_state and not st.session_state.workout_logs.empty) else 1,
-                            "date": datetime.today().strftime('%Y-%m-%d'),
-                            "athlete_id": string_id,
-                            "type": session_type,
-                            "raw": float(raw_time),
-                            "fat": float(fat_time),
-                            "proj_100": float(proj)
-                        }
-                        
-                        # Commit to Database Memory
-                        log_entry_df = pd.DataFrame([new_log])
-                        if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
-                            st.session_state.workout_logs = log_entry_df
-                        else:
-                            st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, log_entry_df], ignore_index=True)
-                        
-                        # Visual notification toasts are fast and don't muddy the viewport UI layout
-                        st.toast(f"✅ Saved entry of {fat_time:.2f}s for {athlete_name}!")
-                        st.rerun()
+            for idx, row in display_today.iterrows():
+                athlete_display_name = row[name_key] if pd.notna(row[name_key]) else f"Athlete #{row['athlete_id']}"
+                drill_label = "⚡ 20m Fly" if row['type'] == "20m_fly" else "🧱 30m Block Start"
+                group_label = f"({row['group']})" if 'group' in row and pd.notna(row['group']) else ""
+                
+                # Render clean activity card streams
+                with st.container(border=True):
+                    v1, v2, v3 = st.columns([4, 3, 2])
+                    with v1:
+                        st.markdown(f"🏃 **{athlete_display_name}** {group_label}")
+                        st.caption(f"Drill Profile: {drill_label}")
+                    with v2:
+                        st.markdown(f"### **{row[fat_col]:.2f}s FAT**")
+                    with v3:
+                        st.write("") # Vertical offset balance spacer
+                        if 'proj_100' in row and pd.notna(row['proj_100']):
+                            st.markdown(f"🎯 *Proj 100m: {row['proj_100']:.2f}s*")
 
     # -------------------------------------------------------------
     # REAL-TIME LOG HISTORY OVERVIEW TAB
