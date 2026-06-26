@@ -616,3 +616,30 @@ elif app_portal == "📄 AD Report Export":
     
     st.write("---")
     st.info("💡 Pro-Tip: Right-click the screen and click 'Print' (or Cmd+P / Ctrl+P) to save this report directly as a clean, black-and-white paper layout.")
+
+# ==========================================
+# MODULE 6: 4x100M RELAY BUILDER
+# ==========================================
+elif app_mode == "🤝 4x100m Relay Builder":
+    st.title("🤝 4x100m Relay Builder")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Incoming Runner (Fly)")
+        inc_athlete = st.selectbox("Select Incoming:", st.session_state.athletes['name'].unique(), key="inc")
+        inc_id = st.session_state.athletes[st.session_state.athletes['name'] == inc_athlete]['id'].values
+        inc_query = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == inc_id) & (st.session_state.workout_logs['type'] == "20m_fly")]
+        inc_fly = inc_query['fat'].min() if not inc_query.empty else 2.30
+        inc_fly = st.number_input("20m Fly (s)", value=float(inc_fly))
+        
+    with col2:
+        st.subheader("Outgoing Runner (Block)")
+        out_athlete = st.selectbox("Select Outgoing:", st.session_state.athletes['name'].unique(), key="out")
+        out_id = st.session_state.athletes[st.session_state.athletes['name'] == out_athlete]['id'].values
+        out_query = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == out_id) & (st.session_state.workout_logs['type'] == "30m_block")]
+        out_block = out_query['fat'].min() if not out_query.empty else 4.40
+        out_block = st.number_input("30m Block (s)", value=float(out_block))
+        
+    st.write("---")
+    go_mark = calculate_relay_go_mark(inc_fly, out_block)
+    st.subheader(f"🎯 Target Go Mark: {go_mark} Steps")
