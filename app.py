@@ -154,12 +154,18 @@ if app_portal == "👥 Roster & Onboarding Hub":
                 if st.form_submit_button("Submit Profile Request"):
                     if s_first and s_last:
                         calc_grade = max(9, min(12 - (s_grad - 2026), 12))
-st.session_state.pending_registrations = pd.concat([
-                        st.session_state.pending_registrations, 
-                        pd.DataFrame([{"first_name": s_first, "last_name": s_last, "gender": s_gender, "graduation_year": s_grad, "grade": calc_grade}])
-                    ], ignore_index=True)
-                    st.success("Sent request to Coach staging area container.")
-                    st.rerun()
+                        st.session_state.pending_registrations = pd.concat([
+                            st.session_state.pending_registrations, 
+                            pd.DataFrame([{
+                                "first_name": s_first, 
+                                "last_name": s_last, 
+                                "gender": s_gender, 
+                                "graduation_year": s_grad, 
+                                "grade": calc_grade
+                            }])
+                        ], ignore_index=True)
+                        st.success("Sent request to Coach staging area container.")
+                        st.rerun()
 
     with tab_actions:
         st.subheader("🛡️ Step C: The Gatekeeper Approval Staging Area")
@@ -171,7 +177,15 @@ st.session_state.pending_registrations = pd.concat([
                     next_id = f"UUID_A{len(st.session_state.athletes) + 1}"
                     st.session_state.athletes = pd.concat([
                         st.session_state.athletes, 
-                        pd.DataFrame([{"athlete_id": next_id, "first_name": p["first_name"], "last_name": p["last_name"], "gender": p["gender"], "grade": p["grade"], "status": "varsity", "group": "Short Sprinters"}])
+                        pd.DataFrame([{
+                            "athlete_id": next_id, 
+                            "first_name": p["first_name"], 
+                            "last_name": p["last_name"],
+                            "gender": p["gender"], 
+                            "grade": p["grade"], 
+                            "status": "varsity", 
+                            "group": "Short Sprinters"
+                        }])
                     ], ignore_index=True)
                 st.session_state.pending_registrations = pd.DataFrame(columns=["first_name", "last_name", "gender", "graduation_year", "grade"])
                 st.success("Roster updated successfully without typing inputs!")
@@ -195,11 +209,11 @@ st.session_state.pending_registrations = pd.concat([
                         st.session_state.athletes = pd.concat([st.session_state.athletes, imported_df[required_cols + ["athlete_id"]]], ignore_index=True)
                         st.success(f"Successfully appended {len(imported_df)} roster profiles via bulk data mapper link!")
                         st.rerun()
-                    else:
+                    else: 
                         st.error(f"Spreadsheet must strictly match schemas headers: {required_cols}")
-                except Exception as e:
+                except Exception as e: 
                     st.error(f"Data stream fault: {str(e)}")
-                    
+                
         with act_col2:
             st.markdown("B. Custom Sub-Roster Architect")
             new_group_lbl = st.text_input("Label Title:", placeholder="e.g., Jumpers Pool")
@@ -218,11 +232,12 @@ st.session_state.pending_registrations = pd.concat([
                 st.session_state.athletes = active_undergrads.reset_index(drop=True)
                 st.success("Rollover processing finalized! Database adjusted, clean, and optimized for the next track year sequence.")
                 st.rerun()
-                
-        # Display Control Center Matrix Core Rows
+
+        # Display Control Center Matrix Rows
         st.markdown("---")
         st.subheader("📋 Coach's Control Center Dashboard Matrix")
         group_view = st.selectbox("Group Filter View Routing Toggle:", ["All"] + st.session_state.training_groups)
+        
         display_set = st.session_state.athletes.copy()
         if group_view != "All":
             display_set = display_set[display_set["group"] == group_view]
@@ -233,18 +248,24 @@ st.session_state.pending_registrations = pd.concat([
             best_fly_str = f"{best_fly:.2f}s FAT" if best_fly != float('inf') else "N/A"
             
             st.markdown(f"""
-            <div class="metric-card">
-                <b>👤 {row['last_name']}, {row['first_name']} (Grade {row['grade']})</b><br>
-                • Best Season 20m Fly Parameter: {best_fly_str}<br>
-                <span class="badge-tag-varsity">{row['status'].upper()}</span>
-                <span class="badge-tag-group">{row['group'].upper()}</span>
+            <div class='metric-card'>
+                <div style='display: flex; justify-content: space-between; align-items: center;'>
+                    <div>
+                        <b>👤 {row['last_name']}, {row['first_name']} (Grade {row['grade']})</b><br/>
+                        <small style='color: #555;'>• Best Season 20m Fly Parameter: {best_fly_str}</small>
+                    </div>
+                    <div>
+                        <span class='badge-tag-varsity'>{row['status'].upper()}</span>
+                        <span class='badge-tag-group'>{row['group'].upper()}</span>
+                    </div>
+                </div>
             </div>
             """, unsafe_allow_html=True)
             
             m_c1, m_c2 = st.columns(2)
-            with m_c1:
+            with m_c1: 
                 new_g = st.selectbox("➡️ Move to Group...", st.session_state.training_groups, index=st.session_state.training_groups.index(row["group"]) if row["group"] in st.session_state.training_groups else 0, key=f"sel_{a_id}")
-            with m_c2:
+            with m_c2: 
                 if st.button("Commit Group Move", key=f"mov_btn_{a_id}"):
                     st.session_state.athletes.loc[st.session_state.athletes["athlete_id"] == a_id, "group"] = new_g
                     st.success(f"Shifted group alignment parameters for {row['first_name']}")
