@@ -115,7 +115,8 @@ timing_method = st.sidebar.radio("⚙️ Global Timing Input Method:", ["Freelap
 is_hand = timing_method == "Hand-Timed"
 
 app_portal = st.sidebar.radio("Go To Module Portal:", [
-    "👥 Roster & Onboarding Hub", 
+    "👥 Roster & Onboarding Hub",
+    "⏱️ Workout Tracker",
     "⏱️ Live Session Dashboard", 
     "🏆 Team Leaderboards", 
     "📈 Athlete Progress Trends",
@@ -979,26 +980,64 @@ elif app_portal == "⏱️ Workout Tracker":
         session_type = st.selectbox("Drill Profile:", ["20m_fly", "30m_block"])
         
     st.write("---")
-    for index, athlete in st.session_state.athletes.iterrows():
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.write(f"**{athlete['name']}**")
-        with c2:
-            raw_time = st.number_input(f"Split (s)", min_value=0.0, max_value=10.0, step=0.01, key=f"in_{athlete['id']}")
-        with c3:
-            if st.button("Save Log", key=f"btn_{athlete['id']}"):
-                if raw_time > 0:
-                    fat_time = normalize_hand_fly(raw_time) if timing_system == "Hand-Timed (Stopwatch)" else raw_time
-                    proj = calculate_projected_100m(4.5, fat_time, athlete['gender']) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete['gender'])
-                    
-                    new_log = {
-                        "log_id": len(st.session_state.workout_logs) + 1,
-                        "date": datetime.today().strftime('%Y-%m-%d'),
-                        "athlete_id": athlete['id'],
-                        "type": session_type,
-                        "raw": raw_time,
-                        "fat": fat_time,
-                        "proj_100": proj
-                    }
-                    st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log])], ignore_index=True)
-                    st.rerun()
+    
+    # Ensure baseline safety checks for athletes session storage dataframes
+    if 'athletes' not in st.session_state or st.session_state.athletes.empty:
+        st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
+    else:
+        # Standardize athlete handles to pull lowercase properties safely
+        roster_view = st.session_state.athletes.copy()
+        roster_view.columns = [str(c).lower() for c in roster_view.columns]
+        
+        id_key = 'id' if 'id' in roster_view.columns else roster_view.columns[0]
+        name_key = 'name' if 'name' in roster_view.columns else ([c for c in roster_view.columns if 'name' in c] + ['id'])[0]
+        gender_key = 'gender' if 'gender' in roster_view.columns else ('sex' if 'sex' in roster_view.columns else None)
+
+        for index, athlete in roster_view.iterrows():
+            athlete_id = athlete[id_key]
+            athlete_name = athlete[name_key]
+            athlete_gender = athlete[gender_key] if gender_key else 'male'
+            
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.write(f"**{athlete_name}**")
+            with c2:
+                raw_time = st.number_input(f"Split (s)", min_value=0.0, max_value=10.0, step=0.01, key=f"in_{athlete_id}")
+            with c3:
+                if st.button("Save Log", key=f"btn_{athlete_id}"):
+                    if raw_time > 0:
+                        from datetime import datetime
+                        
+                        # Apply fallback conversions if functions aren't universally available global scopes
+                        fat_time = raw_time
+                        if timing_system == "Hand-Timed (Stopwatch)":
+                            if 'normalize_hand_fly' in globals():
+                                fat_time = normalize_hand_fly(raw_time)
+                            else:
+                                fat_time = raw_time + 0.24 # Traditional baseline conversion constant fallback
+                        
+                        # Project standard performance markers
+                        if 'calculate_projected_100m' in globals():
+                            proj = calculate_projected_100m(4.5, fat_time, athlete_gender) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete_gender)
+                        else:
+                            proj = (fat_time * 5.0) + 1.25 if session_type == "20m_fly" else 11.50 # Blueprint baseline approximations
+                        
+                        new_log = {
+                            "log_id": len(st.session_state.workout_logs) + 1 if 'workout_logs' in st.session_state else 1,
+                            "date": datetime.today().strftime('%Y-%m-%d'),
+                            "athlete_id": str(athlete_id).strip(),
+                            "type": session_type,
+                            "raw": float(raw_time),
+                            "fat": float(fat_time),
+                            "proj_100": float(proj)
+                        }
+                        
+                        # Append securely back to main data frame log stacks
+                        log_entry_df = pd.DataFrame([new_log])
+                        if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
+                            st.session_state.workout_logs = log_entry_df
+                        else:
+                            st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, log_entry_df], ignore_index=True)
+                        
+                        st.success(f"✅ Logged entry mark for {athlete_name}!")
+                        st.rerun()
