@@ -970,7 +970,7 @@ elif app_portal == "📄 AD Report Export":
 # ==========================================
 # MODULE: WORKOUT TRACKER
 # ==========================================
-elif app_mode == "⏱️ Workout Tracker":
+elif app_portal == "⏱️ Workout Tracker":
     st.title("⏱️ Live Workout Tracker")
     col1, col2 = st.columns(2)
     with col1:
