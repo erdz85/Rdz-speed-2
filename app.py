@@ -371,38 +371,110 @@ elif app_portal == "⏱️ Live Session Dashboard":
 # ==========================================
 elif app_portal == "🏆 Team Leaderboards":
     st.title("🔥 Team Leaderboards (The Engagement Engine)")
-    seg_filter = st.radio("Segment Filter:", ["⚡ 20m Fly Rankings", "⏱️ Projected 100m"], horizontal=True)
     
-    col_f1, col_f2 = st.columns(2)
-    with col_f1: gender_filter = st.selectbox("Gender Select:", ["All", "male", "female"])
-    with col_f2: status_filter = st.selectbox("Roster Tier:", ["All Varsity", "varsity", "jv"])
+    # Check if we have logs to compute statistics from
+    if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
+        st.warning("⚠️ No workout log data found to generate leaderboards.")
+    else:
+        logs = st.session_state.workout_logs.copy()
+        logs.columns = [str(c).lower() for c in logs.columns]
         
-    if not st.session_state.workout_logs.empty:
-        merged_rank = pd.merge(st.session_state.workout_logs, st.session_state.athletes, on="athlete_id")
-        if gender_filter != "All": merged_rank = merged_rank[merged_rank["gender"] == gender_filter]
-        if status_filter != "All Varsity": merged_rank = merged_rank[merged_rank["status"] == status_filter]
-            
-        if not merged_rank.empty:
-            idx_bests = merged_rank.groupby("athlete_id")["normalized_fat_time"].idxmin()
-            leaderboard_df = merged_rank.loc[idx_bests].sort_values(by="normalized_fat_time").reset_index(drop=True)
-            
-            for rank_idx, row in leaderboard_df.iterrows():
-                medal = "🥇" if rank_idx == 0 else ("🥈" if rank_idx == 1 else ("🥉" if rank_idx == 2 else "👤"))
-                badge = "<span class='badge-top-speed'>⚡ Top Speed</span>" if rank_idx == 0 else ("<span class='badge-hot'>🔥 Hot Streak</span>" if row["is_pr"] else "")
-                score = f"{row['normalized_fat_time']:.2f}s FAT" if seg_filter == "⚡ 20m Fly Rankings" else f"{row['projected_100m']:.2f}s (Proj 100m)"
-                
-                st.markdown(f"""
-                <div class='metric-card'>
-                    <div style='display: flex; justify-content: space-between; align-items: center;'>
-                        <div><b>{medal} {rank_idx+1}. {row['first_name']} {row['last_name']} ({row['group']} • Grade {row['grade']})</b></div>
-                        <div><span style='font-size: 1.2rem; font-weight: bold; margin-right: 15px;'>{score}</span>{badge}</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            st.markdown("### 👑 RECENTLY CROWNED ANNOUNCEMENTS")
-            st.info(f"🏆 Social Feed: **{leaderboard_df.iloc[0]['first_name']} {leaderboard_df.iloc[0]['last_name']}** is holding down the absolute apex top velocity standard!")
+        # Force numeric conversions on timing values
+        fat_col = 'fat' if 'fat' in logs.columns else ('raw' if 'raw' in logs.columns else logs.columns[-1])
+        logs[fat_col] = pd.to_numeric(logs[fat_col], errors='coerce')
+        type_col = 'type' if 'type' in logs.columns else ('session_type' if 'session_type' in logs.columns else None)
 
+        # --- RECONFIGURED SEGMENT FILTERS ---
+        st.subheader("Segment Filter:")
+        leaderboard_type = st.radio(
+            label="Select Ranking Type",
+            options=["⚡ 20m Fly Rankings", "🧱 30m Block Rankings", "⏱️ Projected 100m"],
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+        
+        # Layout row for Gender and Roster Tiers
+        l_col1, l_col2 = st.columns(2)
+        with l_col1:
+            gender_filter = st.selectbox("Gender Select:", ["All", "Male", "Female"])
+        with l_col2:
+            tier_filter = st.selectbox("Roster Tier:", ["All Varsity", "JV / Developing"])
+
+        # Prepare Athlete Roster Profiles
+        roster = st.session_state.athletes.copy()
+        roster.columns = [str(c).lower() for c in roster.columns]
+        id_col = 'id' if 'id' in roster.columns else ('athlete_id' if 'athlete_id' in roster.columns else roster.columns[0])
+        name_col = 'name' if 'name' in roster.columns.values else ([c for c in roster.columns if 'name' in c] + ['id'])[0]
+        
+        # Normalize baseline text matching keys
+        if 'name' not in roster.columns: roster['name'] = roster[name_col]
+        if 'id' not in roster.columns: roster['id'] = roster[id_col]
+
+        # Apply Sidebar/Drop-down Demographic Filters to Roster Pool
+        if gender_filter != "All" and 'gender' in roster.columns:
+            roster = roster[roster['gender'].astype(str).str.lower() == gender_filter.lower()]
+        if 'tier' in roster.columns:
+            if tier_filter == "All Varsity":
+                roster = roster[roster['tier'].astype(str).str.lower().str.contains("varsity", na=True)]
+            else:
+                roster = roster[~roster['tier'].astype(str).str.lower().str.contains("varsity", na=False)]
+
+        # --- LEADERBOARD COMPILATION LOGIC ENGINE ---
+        st.write("")
+        if "20m Fly Rankings" in leaderboard_type:
+            st.subheader("🏃 Top Speed 20m Fly Leaders")
+            metric_df = logs[logs[type_col] == '20m_fly'].groupby('athlete_id')[fat_col].min().reset_index()
+            suffix = "s FAT"
+            badge_text = "Top Speed"
+        
+        elif "30m Block Rankings" in leaderboard_type:
+            st.subheader("🧱 Acceleration 30m Block Leaders")
+            metric_df = logs[logs[type_col] == '30m_block'].groupby('athlete_id')[fat_col].min().reset_index()
+            suffix = "s FAT"
+            badge_text = "Power Start"
+            
+        else: # Projected 100m calculation fallback
+            st.subheader("⏱️ Projected 100m Dash Leaderboard")
+            # Pull minimum fly to run a classic high-velocity curve estimation profile formula
+            metric_df = logs[logs[type_col] == '20m_fly'].groupby('athlete_id')[fat_col].min().reset_index()
+            # Classic speed development equation: (Fly * 5) + 1.25s block transition factor
+            metric_df[fat_col] = (metric_df[fat_col] * 5.0) + 1.25
+            suffix = "s (Est)"
+            badge_text = "Projected"
+
+        # Merge calculated leaders dataframe back with filtered demographic roster rows
+        leaderboard_df = roster.merge(metric_df, left_on='id', right_on='athlete_id', how='inner')
+        leaderboard_df = leaderboard_df.sort_values(by=fat_col, ascending=True).reset_index(drop=True)
+
+        # --- UI DISPLAY RENDERING LOOP MATCHING STYLE MIGRATIONS ---
+        if leaderboard_df.empty:
+            st.info("ℹ️ No athlete logs found matching the selected leaderboard filters.")
+        else:
+            for rank, (_, row) in enumerate(leaderboard_df.iterrows(), start=1):
+                # Format ranking medals
+                if rank == 1: medal = "🥇"
+                elif rank == 2: medal = "🥈"
+                elif rank == 3: medal = "🥉"
+                else: medal = "👤"
+                
+                # Metadata line adjustments
+                group_tag = row.get('group', 'Short Sprinters')
+                grade_tag = f"• Grade {row['grade']}" if 'grade' in row and pd.notna(row['grade']) else ""
+                
+                # Render clean leaderboard cards row layout
+                with st.container(border=True):
+                    col_rank, col_val, col_badge = st.columns([5, 2, 2])
+                    with col_rank:
+                        st.markdown(f"#### {medal} {rank}. {row['name']} *({group_tag} {grade_tag})*")
+                    with col_val:
+                        st.markdown(f"### **{row[fat_col]:.2f}{suffix}**")
+                    with col_badge:
+                        st.write("") # Baseline spacing aligner
+                        if rank == 1:
+                            st.warning(f"🏆 {badge_text}")
+                        else:
+                            st.info(f"🔥 Hot Streak")
+                            
 # ==========================================
 # MODULE 4: ATHLETE PROGRESS SCREEN
 # ==========================================
