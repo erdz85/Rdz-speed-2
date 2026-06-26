@@ -26,6 +26,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 # ==========================================
 # 2. STATE MANAGER & PERSISTENT STORAGE
 # ==========================================
@@ -49,6 +50,7 @@ if "workout_logs" not in st.session_state:
         {"date": "2026-03-01", "athlete_id": "A4", "type": "30m_block", "fat": 4.55}
     ])
 
+
 # ==========================================
 # 3. ATHLETE SELF-REGISTRATION LAYER (QR INTERCEPT)
 # ==========================================
@@ -68,20 +70,19 @@ if "view" in st.query_params and st.query_params["view"] == "register":
             new_row = {"id": new_id, "name": new_name, "gender": new_gender, "group": new_group, "grade": new_grade}
             st.session_state.athletes = pd.concat([st.session_state.athletes, pd.DataFrame([new_row])], ignore_index=True)
             st.success(f"🎉 Welcome {new_name}! You are registered. You can close this tab now.")
-            
-    # Completely stops the layout generation here so athletes NEVER see coach settings
     st.stop()
+
 
 # ==========================================
 # 4. HELPER FUNCTIONS
 # ==========================================
 def calculate_relay_go_mark(inc_fly, out_block):
-    # Kinetic Cross-Over Formula Simulator
     try:
         raw_mark = (float(out_block) - float(inc_fly)) * 7.5
         return max(1, round(raw_mark, 1))
     except:
         return 12.0
+
 
 # ==========================================
 # 5. SIDEBAR NAVIGATION PANEL (COACH VIEW)
@@ -91,15 +92,22 @@ st.sidebar.write("Program Classification: HS Track")
 st.sidebar.write("---")
 app_mode = st.sidebar.radio(
     "Go To Module Portal:",
-    ["👥 Roster & Onboarding", "📈 Athlete Progress", "🤝 4x100m Relay Builder", "📄 AD Report Generator"]
+    [
+        "👥 Roster & Onboarding", 
+        "📈 Athlete Progress", 
+        "🏋️ Workout Logger", 
+        "🏆 Team Leaderboards", 
+        "🤝 4x100m Relay Builder", 
+        "📄 AD Report Generator"
+    ]
 )
+
 
 # ==========================================
 # MODULE 1: ROSTER MANAGEMENT & ONBOARDING
 # ==========================================
 if app_mode == "👥 Roster & Onboarding":
     st.title("👥 Roster Management & Athlete Onboarding")
-    
     col1, col2 = st.columns([1, 1.5])
     
     with col1:
@@ -107,8 +115,15 @@ if app_mode == "👥 Roster & Onboarding":
         st.info("Have your athletes scan this or use the code below during team check-ins.")
         st.code("RDZ-NORTHSIDE-2026", language="text")
         
-        # --- GENERATE LINK WITH FLAG INCLUDED ---
-        qr_payload_data = "https://streamlit.app"
+        try:
+            from streamlit_javascript import st_javascript
+            page_url = st_javascript("window.location.href.split('?')")
+            if not page_url or page_url == "0":
+                qr_payload_data = "https://streamlit.app"
+            else:
+                qr_payload_data = f"{page_url}?view=register"
+        except:
+            qr_payload_data = "https://streamlit.app"
         
         qr = qrcode.QRCode(version=1, box_size=10, border=2)
         qr.add_data(qr_payload_data)
@@ -144,97 +159,22 @@ if app_mode == "👥 Roster & Onboarding":
         if st.button("⚠️ Run End-of-Season Roster Rollover"):
             st.warning("This archives seniors and increments all grades by one year.")
 
-# ==========================================
-# MODULE 2: WORKOUT TRACKER
-# ==========================================
-elif app_mode == "⏱️ Workout Tracker":
-    st.title("⏱️ Live Workout Tracker Dashboard")
-    
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        timing_system = st.radio("Global Timing Method Source:", ["Electronic / FAT (Freelap)", "Hand-Timed (Stopwatch)"])
-    with col2:
-        session_type = st.selectbox("Sprinting Drill Profile:", ["20m_fly", "30m_block"])
-        
-    st.write("---")
-    st.subheader("⚡ Rapid Input Ledger")
-    
-    # Iterate dynamically through roster for rapid input logging
-    for index, athlete in st.session_state.athletes.iterrows():
-        c1, c2, c3 = st.columns([2, 2, 1])
-        with c1:
-            st.write(f"**{athlete['name']}** ({athlete['group']})")
-        with c2:
-            raw_time = st.number_input(f"Raw Split (s)", min_value=0.0, max_value=10.0, step=0.01, key=f"input_{athlete['id']}")
-        with c3:
-            if st.button("Save", key=f"btn_{athlete['id']}"):
-                if raw_time > 0:
-                    fat_time = normalize_hand_fly(raw_time) if timing_system == "Hand-Timed (Stopwatch)" else raw_time
-                    proj_100 = calculate_projected_100m(4.5, fat_time, athlete['gender']) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete['gender'])
-                    
-                    new_log = {
-                        "log_id": len(st.session_state.workout_logs) + 1,
-                        "date": datetime.today().strftime('%Y-%m-%d'),
-                        "athlete_id": athlete['id'],
-                        "type": session_type,
-                        "raw": raw_time,
-                        "fat": fat_time,
-                        "proj_100": proj_100
-                    }
-                    st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log])], ignore_index=True)
-                    st.toast(f"Logged {fat_time}s for {athlete['name']}!")
-                    st.rerun()
 
 # ==========================================
-# MODULE 3: TEAM LEADERBOARD
-# ==========================================
-elif app_mode == "🔥 Team Leaderboard":
-    st.title("🔥 Team Leaderboard Settings")
-    
-    gender_filter = st.selectbox("Filter Gender Stack:", ["All", "Male", "Female"])
-    metric_filter = st.selectbox("Select Leaderboard Rank Index:", ["20m_fly", "30m_block"])
-    
-    # Pull best times per athlete
-    logs = st.session_state.workout_logs[st.session_state.workout_logs['type'] == metric_filter]
-    athletes = st.session_state.athletes
-    
-    if not logs.empty:
-        merged = pd.merge(logs, athletes, left_on="athlete_id", right_on="id")
-        if gender_filter != "All":
-            merged = merged[merged['gender'] == gender_filter]
-            
-        leaderboard = merged.loc[merged.groupby("athlete_id")["fat"].idxmin()]
-        leaderboard = leaderboard.sort_values(by="fat", ascending=True).reset_index(drop=True)
-        
-        st.subheader("🏆 Current Rankings (Normalized to FAT standard)")
-        for idx, row in leaderboard.iterrows():
-            badge = "⚡ Top Speed" if idx == 0 else "🏃 Track Star"
-            st.markdown(f"""
-            <div class="metric-card">
-                <h4>#{idx+1} {row['name']} - <span class="badge-top-speed">{row['fat']}s FAT</span></h4>
-                <p>Projected 100m: <b>{row['proj_100']}s</b> | Group: {row['group']} | Status: <span class="badge-hot">{badge}</span></p>
-            </div>
-            """, unsafe_html=True)
-    else:
-        st.info("No recorded logs available for this combination of inputs yet.")
-
-# ==========================================
-# MODULE 4: ATHLETE PROGRESS
+# MODULE 2: ATHLETE PROGRESS
 # ==========================================
 elif app_mode == "📈 Athlete Progress":
     st.title("📈 Athlete Performance Trajectory Deep Dive")
     selected_athlete = st.selectbox("Select Athlete Profile:", st.session_state.athletes['name'].unique())
-    athlete_id = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete]['id'].values[0]
+    athlete_id = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete]['id'].values
     athlete_logs = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == athlete_id) & (st.session_state.workout_logs['type'] == "20m_fly")]
     
     if len(athlete_logs) >= 1:
         athlete_logs = athlete_logs.sort_values(by="date")
-        # Plot time series chart using Plotly
         fig = px.line(athlete_logs, x="date", y="fat", title="20m Fly FAT Progression Trend", markers=True)
-        fig.update_yaxes(autorange="reverse") # Faster means smaller numbers
+        fig.update_yaxes(autorange="reverse")
         st.plotly_chart(fig, use_container_width=True)
         
-        # Check for Central Nervous System (CNS) Fatigue
         if len(athlete_logs) >= 2:
             last_two = athlete_logs.tail(2)['fat'].values
             decay_percent = ((last_two[1] - last_two[0]) / last_two[0]) * 100
@@ -245,60 +185,24 @@ elif app_mode == "📈 Athlete Progress":
     else:
         st.info("Provide at least 1 historical entry to populate tracking vectors.")
 
+
 # ==========================================
-# MODULE 5: 4x100M RELAY BUILDER
+# MODULE 3: WORKOUT LOGGER (RESTORED)
 # ==========================================
-elif app_mode == "🤝 4x100m Relay Builder":
-    st.title("🤝 4x100m Data-Driven Relay Exchange Module")
-    st.info("This system uses the Kinetic Cross-Over formula to accurately map heel-to-heel steps.")
-    col1, col2 = st.columns(2)
+elif app_mode == "🏋️ Workout Logger":
+    st.title("🏋️ High-Frequency Workout Data Logger")
+    st.write("Input newly converted FAT times straight from timing gates into the core ledger database.")
     
+    col1, col2 = st.columns(2)
     with col1:
-        st.subheader("📥 Incoming Runner (Max Velocity Flying Anchor)")
-        inc_athlete = st.selectbox("Select Incoming Runner:", st.session_state.athletes['name'].unique(), key="inc")
-        inc_id = st.session_state.athletes[st.session_state.athletes['name'] == inc_athlete]['id'].values[0]
-        # Fallback default if no history exists yet
-        inc_fly = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == inc_id) & (st.session_state.workout_logs['type'] == "20m_fly")]['fat'].min()
-        inc_fly = st.number_input("Incoming 20m Fly (s)", value=float(inc_fly) if not pd.isna(inc_fly) else 2.30)
-        
+        log_date = st.date_input("Workout Session Date", datetime.today())
+        log_athlete = st.selectbox("Select Competing Athlete:", st.session_state.athletes['name'].unique(), key="log_ath")
+        log_id = st.session_state.athletes[st.session_state.athletes['name'] == log_athlete]['id'].values[0]
     with col2:
-        st.subheader("🛫 Outgoing Runner (Block Acceleration Drive)")
-        out_athlete = st.selectbox("Select Outgoing Runner:", st.session_state.athletes['name'].unique(), key="out")
-        out_id = st.session_state.athletes[st.session_state.athletes['name'] == out_athlete]['id'].values[0]
-        out_block = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == out_id) & (st.session_state.workout_logs['type'] == "30m_block")]['fat'].min()
-        out_block = st.number_input("Outgoing 30m Block (s)", value=float(out_block) if not pd.isna(out_block) else 4.40)
+        log_type = st.selectbox("Test Metric Vector Profile:", ["20m_fly", "30m_block"])
+        log_time = st.number_input("Recorded FAT Time Value (seconds):", min_value=0.00, max_value=15.00, value=2.50, step=0.01)
         
-    st.write("---")
-    go_mark_steps = calculate_relay_go_mark(inc_fly, out_block)
-    st.metric(label="🎯 TARGET ACCELERATION GO MARK ENGINE", value=f"{go_mark_steps} Steps")
-    st.markdown(f"""
-    Deployment Execution Instructions:
-    1. Stand exactly on the international Acceleration Line (the apex point of the zone triangle).
-    2. Turn around and walk backward toward the starting line blocks.
-    3. Count out exactly {go_mark_steps} heel-to-heel footsteps.
-    4. Place coaching tape at that location. When the incoming runner crosses the tape, the outgoing runner hits 100% full-throttle acceleration.
-    """)
-
-# ==========================================
-# MODULE 6: AD REPORT GENERATOR
-# ==========================================
-elif app_mode == "📄 AD Report Generator":
-    st.title("📄 Performance Portfolio Export Module")
-    st.write("Generate high-contrast, administrative-ready print layouts for Athletic Directors and Program Scouters.")
-    report_html = f"""
-    ⚡ RDZ SPEED DEVELOPMENT SYSTEM REPORT
-    Generated: {datetime.today().strftime('%B %d, %Y')} | Program Classification: High School Track & Field
-
-    📋 ACTIVE PROGRAM ROSTER DATA ROSTER SUMMARY
-    Total Tracked Sprinters: {len(st.session_state.athletes)} Active Athletes
-    Primary Metric Target Matrix Focus: 20m Flying Sprints & 30m Stationary Blocks
-
-    📈 TOP TEAM VELOCITY PERFORMERS
-    Marcus Anderson (Jr.) - 1.98s Converted FAT Fly | Projected 100m: 10.95s
-    Elena Martinez (Jr.) - 2.45s Converted FAT Fly | Projected 100m: 12.80s
-
-    Verified Authentic via RDZ Speed Development Analytics Database Engine
-    """
-    st.markdown(report_html, unsafe_html=True)
-    st.write("---")
-    st.download_button("📥 Export Report to Print Ledger System", data=report_html, file_name="rdz_speed_report.html", mime="text/html")
+    if st.button("📥 Save Repetition Entry to History Logs"):
+        new_log_row = {"date": str(log_date), "athlete_id": log_id, "type": log_type, "fat": float(log_time)}
+        st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log_row])], ignore_index=True)
+st.success(f"Successfully recorded {log_time}s ({log_type}) for {log_athlete}!")==========================================MODULE 4: TEAM LEADERBOARDS (RESTORED)==========================================elif app_mode == "🏆 Team Leaderboards":st.title("🏆 Power & Velocity Team Leaderboards")st.write("Live program rankings derived from absolute maximum output thresholds.")tab1, tab2 = st.tabs(["⚡ Top 20m Fly Times", "🛫 Top 30m Blocks"])with tab1:fly_data = st.session_state.workout_logs[st.session_state.workout_logs['type'] == "20m_fly"]if not fly_data.empty:leaderboard_fly = fly_data.groupby('athlete_id')['fat'].min().reset_index()# Map nameleaderboard_fly = leaderboard_fly.merge(st.session_state.athletes, left_on='athlete_id', right_on='id')leaderboard_fly = leaderboard_fly.sort_values(by="fat")[['name', 'group', 'grade', 'fat']].rename(columns={"fat": "Best Fly Time (s)"})st.dataframe(leaderboard_fly, use_container_width=True, hide_index=True)else:st.info("No recorded fly data found.")with tab2:block_data = st.session_state.workout_logs[st.session_state.workout_logs['type'] == "30m_block"]if not block_data.empty:leaderboard_block = block_data.groupby('athlete_id')['fat'].min().reset_index()leaderboard_block = leaderboard_block.merge(st.session_state.athletes, left_on='athlete_id', right_on='id')leaderboard_block = leaderboard_block.sort_values(by="fat")[['name', 'group', 'grade', 'fat']].rename(columns={"fat": "Best Block Time (s)"})st.dataframe(leaderboard_block, use_container_width=True, hide_index=True)else:st.info("No recorded block start data found.")==========================================MODULE 5: 4x100M RELAY BUILDER==========================================elif app_mode == "🤝 4x100m Relay Builder":st.title("🤝 4x100m Data-Driven Relay Exchange Module")st.info("This system uses the Kinetic Cross-Over formula to accurately map heel-to-heel steps.")col1, col2 = st.columns(2)with col1:st.subheader("📥 Incoming Runner (Max Velocity Flying Anchor)")inc_athlete = st.selectbox("Select Incoming Runner:", st.session_state.athletes['name'].unique(), key="inc")inc_id = st.session_state.athletes[st.session_state.athletes['name'] == inc_athlete]['id'].valuesinc_fly = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == inc_id) & (st.session_state.workout_logs['type'] == "20m_fly")]['fat'].min()inc_fly = st.number_input("Incoming 20m Fly (s)", value=float(inc_fly) if not pd.isna(inc_fly) else 2.30)with col2:st.subheader("🛫 Outgoing Runner (Block Acceleration Drive)")out_athlete = st.selectbox("Select Outgoing Runner:", st.session_state.athletes['name'].unique(), key="out")out_id = st.session_state.athletes[st.session_state.athletes['name'] == out_athlete]['id'].valuesout_block = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == out_id) & (st.session_state.workout_logs['type'] == "30m_block")]['fat'].min()out_block = st.number_input("Outgoing 30m Block (s)", value=float(out_block) if not pd.isna(out_block) else 4.40)st.write("---")go_mark_steps = calculate_relay_go_mark(inc_fly, out_block)st.metric(label="🎯 TARGET ACCELERATION GO MARK ENGINE", value=f"{go_mark_steps} Steps")st.markdown(f"""Deployment Execution Instructions:1. Stand exactly on the international Acceleration Line (the apex point of the zone triangle).2. Turn around and walk backward toward the starting line blocks.3. Count out exactly {go_mark_steps} heel-to-heel footsteps.4. Place coaching tape at that location. When the incoming runner crosses the tape, the outgoing runner hits 100% full-throttle acceleration.""")==========================================MODULE 6: AD REPORT GENERATOR==========================================elif app_mode == "📄 AD Report Generator":st.title("📄 Performance Portfolio Export Module")st.write("Generate high-contrast, administrative-ready print layouts for Athletic Directors and Program Scouters.")report_html = f"""⚡ RDZ SPEED DEVELOPMENT SYSTEM REPORTGenerated: {datetime.today().strftime('%B %d, %Y')} | Program Classification: High School Track & Field📋 ACTIVE PROGRAM ROSTER DATA ROSTER SUMMARYTotal Tracked Sprinters: {len(st.session_state.athletes)} Active AthletesPrimary Metric Target Matrix Focus: 20m Flying Sprints & 30m Stationary Blocks📈 TOP TEAM VELOCITY PERFORMERSMarcus Anderson (Jr.) - 1.98s Converted FAT Fly | Projected 100m: 10.95sElena Martinez (Jr.) - 2.45s Converted FAT Fly | Projected 100m: 12.80sVerified Authentic via RDZ Speed Development Analytics Database Engine"""st.markdown(report_html, unsafe_html=True)st.write("---")st.download_button("📥 Export Report to Print Ledger System", data=report_html, file_name="rdz_speed_report.html", mime="text/html")
