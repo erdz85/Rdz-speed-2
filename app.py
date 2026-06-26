@@ -503,12 +503,54 @@ elif app_portal == "📈 ... Athlete Progress Trends":
             """, unsafe_allow_html=True)
 
 # ==========================================
-# MODULE 5: 4x100m RELAY BUILDER
+# MODULE: 4x100M RELAY BUILDER
 # ==========================================
-elif app_portal == "🤝 4x100m Relay Builder":
-    st.title("🤝 4x100m Relay Builder")
-    st.write("Your relay building code goes here...")
-
+# FIXED: Changed app_mode to app_portal to match global sidebar navigation state
+elif app_portal == "🤝 4x100m Relay Builder" or app_portal == "🤝 4x100m Relay Optimizer":
+    st.title("🤝 4x100m Exchange & Relay Optimizer")
+    st.markdown("Uses automatic fly-to-block differential metrics to define handoff marks.")
+    
+    active_athletes_df = st.session_state.athletes
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Incoming Runner (Max Velocity)")
+        inc_name = st.selectbox("Select Incoming Athlete:", active_athletes_df.apply(lambda r: f"{r['first_name']} {r['last_name']}", axis=1).unique(), key="inc_run_sel")
+        inc_first, inc_last = inc_name.split(" ", 1)
+        inc_id = active_athletes_df[(active_athletes_df["first_name"] == inc_first) & (active_athletes_df["last_name"] == inc_last)]["athlete_id"].values[0]
+        
+        # Pull best 20m fly time from state schemas
+        inc_fly_df = st.session_state.workout_logs[(st.session_state.workout_logs["athlete_id"] == inc_id) & (st.session_state.workout_logs["type"] == "20m_fly")]
+        inc_fly = inc_fly_df["normalized_fat_time"].min() if not inc_fly_df.empty else 2.10
+        st.metric("Best 20m Fly Metric Standard", f"{inc_fly:.2f}s FAT")
+        
+    with col2:
+        st.subheader("Outgoing Runner (Acceleration)")
+        out_name = st.selectbox("Select Outgoing Athlete:", active_athletes_df.apply(lambda r: f"{r['first_name']} {r['last_name']}", axis=1).unique(), key="out_run_sel", index=1 if len(active_athletes_df) > 1 else 0)
+        out_first, out_last = out_name.split(" ", 1)
+        out_id = active_athletes_df[(active_athletes_df["first_name"] == out_first) & (active_athletes_df["last_name"] == out_last)]["athlete_id"].values[0]
+        
+        # Pull best 30m block time from state schemas
+        out_blk_df = st.session_state.workout_logs[(st.session_state.workout_logs["athlete_id"] == out_id) & (st.session_state.workout_logs["type"] == "30m_block")]
+        out_block = out_blk_df["normalized_fat_time"].min() if not out_blk_df.empty else 4.10
+        st.metric("Best 30m Block Metric Standard", f"{out_block:.2f}s FAT")
+        
+    st.write("---")
+    
+    # Differential exchange step marks algorithm execution
+    try:
+        raw_mark = (float(out_block) - float(inc_fly)) * 7.5
+        go_mark_steps = max(1, round(raw_mark, 1))
+    except:
+        go_mark_steps = 18.5
+    
+    st.markdown(f"""
+    <div class="metric-card">
+        <h3>📏 Recommended Exchange Go-Mark Target</h3>
+        <h1 style="color: #ff4b4b; font-size: 3.5rem; margin: 5px 0;">{go_mark_steps} STEPS</h1>
+        <p><b>Handoff Execution Instruction:</b> Place the go-mark tape exactly <b>{go_mark_steps} steps</b> backward behind the acceleration zone line. When the incoming runner reaches the tape mark, the outgoing athlete drives out blindly.</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ==========================================
 # MODULE 6: AD REPORT EXPORT ("THE AD CLOSER")
@@ -663,56 +705,6 @@ elif app_portal == "📄 AD Report Export":
         mime="application/pdf",
         use_container_width=True
     )
-    
-# ==========================================
-# MODULE: 4x100M RELAY BUILDER
-# ==========================================
-# FIXED: Changed app_mode to app_portal to match global sidebar navigation state
-elif app_portal == "🤝 4x100m Relay Builder" or app_portal == "🤝 4x100m Relay Optimizer":
-    st.title("🤝 4x100m Exchange & Relay Optimizer")
-    st.markdown("Uses automatic fly-to-block differential metrics to define handoff marks.")
-    
-    active_athletes_df = st.session_state.athletes
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Incoming Runner (Max Velocity)")
-        inc_name = st.selectbox("Select Incoming Athlete:", active_athletes_df.apply(lambda r: f"{r['first_name']} {r['last_name']}", axis=1).unique(), key="inc_run_sel")
-        inc_first, inc_last = inc_name.split(" ", 1)
-        inc_id = active_athletes_df[(active_athletes_df["first_name"] == inc_first) & (active_athletes_df["last_name"] == inc_last)]["athlete_id"].values[0]
-        
-        # Pull best 20m fly time from state schemas
-        inc_fly_df = st.session_state.workout_logs[(st.session_state.workout_logs["athlete_id"] == inc_id) & (st.session_state.workout_logs["type"] == "20m_fly")]
-        inc_fly = inc_fly_df["normalized_fat_time"].min() if not inc_fly_df.empty else 2.10
-        st.metric("Best 20m Fly Metric Standard", f"{inc_fly:.2f}s FAT")
-        
-    with col2:
-        st.subheader("Outgoing Runner (Acceleration)")
-        out_name = st.selectbox("Select Outgoing Athlete:", active_athletes_df.apply(lambda r: f"{r['first_name']} {r['last_name']}", axis=1).unique(), key="out_run_sel", index=1 if len(active_athletes_df) > 1 else 0)
-        out_first, out_last = out_name.split(" ", 1)
-        out_id = active_athletes_df[(active_athletes_df["first_name"] == out_first) & (active_athletes_df["last_name"] == out_last)]["athlete_id"].values[0]
-        
-        # Pull best 30m block time from state schemas
-        out_blk_df = st.session_state.workout_logs[(st.session_state.workout_logs["athlete_id"] == out_id) & (st.session_state.workout_logs["type"] == "30m_block")]
-        out_block = out_blk_df["normalized_fat_time"].min() if not out_blk_df.empty else 4.10
-        st.metric("Best 30m Block Metric Standard", f"{out_block:.2f}s FAT")
-        
-    st.write("---")
-    
-    # Differential exchange step marks algorithm execution
-    try:
-        raw_mark = (float(out_block) - float(inc_fly)) * 7.5
-        go_mark_steps = max(1, round(raw_mark, 1))
-    except:
-        go_mark_steps = 18.5
-    
-    st.markdown(f"""
-    <div class="metric-card">
-        <h3>📏 Recommended Exchange Go-Mark Target</h3>
-        <h1 style="color: #ff4b4b; font-size: 3.5rem; margin: 5px 0;">{go_mark_steps} STEPS</h1>
-        <p><b>Handoff Execution Instruction:</b> Place the go-mark tape exactly <b>{go_mark_steps} steps</b> backward behind the acceleration zone line. When the incoming runner reaches the tape mark, the outgoing athlete drives out blindly.</p>
-    </div>
-    """, unsafe_allow_html=True)
 
 # ==========================================
 # MODULE: WORKOUT TRACKER
