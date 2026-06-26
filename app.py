@@ -136,6 +136,8 @@ app_mode = st.sidebar.radio(
     ]
 )
 
+# FIXED: Defining this globally here ensures Module 3 can copy it on line 328
+active_athletes_df = st.session_state.athletes[st.session_state.athletes['status'] == "Active"]
 
 # ==========================================
 # MODULE 1: ROSTER MANAGEMENT & ONBOARDING
