@@ -271,7 +271,7 @@ elif app_mode == "🏆 Team Leaderboards":
             
     with tab3:
         projected_list = []
-        for _, athlete in st.session_state.athletes.iterrows():
+        for _, athlete in st.session_state.iterrows():
             ath_id = athlete['id']
             best_fly = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == ath_id) & (st.session_state.workout_logs['type'] == "20m_fly")]['fat'].min()
             best_block = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == ath_id) & (st.session_state.workout_logs['type'] == "30m_block")]['fat'].min()
