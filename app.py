@@ -209,9 +209,16 @@ elif app_mode == "📈 Athlete Progress":
         fig.update_yaxes(autorange="reversed")
         st.plotly_chart(fig, use_container_width=True)
         
+        # Check for Central Nervous System (CNS) Fatigue
         if len(athlete_logs) >= 2:
             last_two = athlete_logs.tail(2)['fat'].values
-            decay_percent = ((last_two - last_two) / last_two) * 100
+            
+            # FIXED: Explicitly pull raw single decimals out of the array boxes
+            val_old = float(last_two[0]) # Second to last run
+            val_new = float(last_two[1]) # Most recent run
+            
+            decay_percent = ((val_new - val_old) / val_old) * 100
+            
             if decay_percent > 4.0:
                 st.warning(f"⚠️ CNS Fatigue Advisory Warning Alert: Velocity dropped by {round(decay_percent,1)}% on last rep. Advise immediate recovery down-regulation.")
             else:
