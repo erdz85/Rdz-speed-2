@@ -276,91 +276,86 @@ if app_portal == "👥 Roster & Onboarding Hub":
 # MODULE 2: LIVE SESSION DASHBOARD
 # ==========================================
 elif app_portal == "⏱️ Live Session Dashboard":
-    st.title("⏱️ Live Session Tracker")
-    st.markdown("#### 🎯 Filter Active Lane Lines By Event Group Assignment")
-    active_group_filter = st.selectbox("Select Active Group At Sprints Line:", ["All Active Roster"] + st.session_state.training_groups)
+    st.title("⏱️ Live Workout Tracker")
     
-    col_h1, col_h2 = st.columns(2)
-    with col_h1:
-        st.subheader("🗓️ CURRENT WORKOUT: Max Velocity Flys")
-    with col_h2:
-        if st.button("🔴 END ACTIVE SESSION", use_container_width=True):
-            if st.session_state.active_session_logs:
-                st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame(st.session_state.active_session_logs)], ignore_index=True)
-                st.session_state.active_session_logs = []
-                st.success("Session saved successfully!")
-                st.rerun()
-            else:
-                st.warning("No runs logged yet.")
-            
-    search_query = st.text_input("🔍 Quick Search Athlete...", "").strip().lower()
-    roster_working_subset = st.session_state.athletes.copy()
-    if active_group_filter != "All Active Roster":
-        roster_working_subset = roster_working_subset[roster_working_subset["group"] == active_group_filter]
+    # 1. Configuration Row (Leverages your global sidebar timing rules)
+    col1, col2 = st.columns(2)
+    with col1:
+        # Display current active timing method as a clean UI status indicator
+        st.info(f"⚡ Current Timing Mode: **{timing_method}**")
+    with col2:
+        session_type = st.selectbox("Drill Profile:", ["20m_fly", "30m_block"])
         
-    st.caption(f"Showing {len(roster_working_subset)} athletes standing at the sprint line.")
+    st.write("---")
     
-    for _, athlete in roster_working_subset.iterrows():
-        full_name = f"{athlete['first_name']} {athlete['last_name']}"
-        if search_query and search_query not in full_name.lower():
-            continue
-        a_id = athlete["athlete_id"]
-        past_logs = st.session_state.workout_logs[st.session_state.workout_logs["athlete_id"] == a_id]
-        last_time_str = f"{past_logs.iloc[-1]['raw_input_time']:.2f}s" if not past_logs.empty else "N/A"
-        
-        r_col1, r_col2 = st.columns(2)
-        with r_col1:
-            st.markdown(f"<span style='color: #111111; font-weight: bold;'>👤 {athlete['last_name']}, {athlete['first_name']}</span> <span style='color: #555555;'>[Last Run: {last_time_str}]</span>", unsafe_allow_html=True)
-        with r_col2:
-            if st.button(f"Enter Time", key=f"btn_{a_id}", use_container_width=True):
-                st.session_state.active_athlete_input_id = a_id
-                st.session_state.keypad_buffer = ""
-                st.rerun()
+    # 2. Table Header for Scannable Grid Layout
+    h1, h2, h3 = st.columns([2, 2, 1])
+    with h1: st.markdown("**Athlete Name**")
+    with h2: st.markdown("**Split Time (seconds)**")
+    with h3: st.markdown("**Action**")
+    st.write("---")
 
-    if st.session_state.active_athlete_input_id:
-        target_id = st.session_state.active_athlete_input_id
-        ath_info = st.session_state.athletes[st.session_state.athletes["athlete_id"] == target_id].iloc[0]
-        st.markdown(f"### 🎛️ Smart Keypad: {ath_info['first_name']} {ath_info['last_name']}")
-        
-        k_col1, k_col2 = st.columns([2, 1.2])
-        with k_col1:
-            row1 = st.columns(3); row2 = st.columns(3); row3 = st.columns(3); row4 = st.columns(3)
-            if row1[0].button("1", key="k1", use_container_width=True): st.session_state.keypad_buffer += "1"; st.rerun()
-            if row1[1].button("2", key="k2", use_container_width=True): st.session_state.keypad_buffer += "2"; st.rerun()
-            if row1[2].button("3", key="k3", use_container_width=True): st.session_state.keypad_buffer += "3"; st.rerun()
-            if row2[0].button("4", key="k4", use_container_width=True): st.session_state.keypad_buffer += "4"; st.rerun()
-            if row2[1].button("5", key="k5", use_container_width=True): st.session_state.keypad_buffer += "5"; st.rerun()
-            if row2[2].button("6", key="k6", use_container_width=True): st.session_state.keypad_buffer += "6"; st.rerun()
-            if row3[0].button("7", key="k7", use_container_width=True): st.session_state.keypad_buffer += "7"; st.rerun()
-            if row3[1].button("8", key="k8", use_container_width=True): st.session_state.keypad_buffer += "8"; st.rerun()
-            if row3[2].button("9", key="k9", use_container_width=True): st.session_state.keypad_buffer += "9"; st.rerun()
-            if row4[0].button(".", key="k_dot", use_container_width=True): st.session_state.keypad_buffer += "."; st.rerun()
-            if row4[1].button("0", key="k0", use_container_width=True): st.session_state.keypad_buffer += "0"; st.rerun()
-            if row4[2].button("⌫ Clear", key="k_clear", use_container_width=True): st.session_state.keypad_buffer = ""; st.rerun()
+    # 3. Dynamic Athlete Logger Loop
+    for index, athlete in st.session_state.athletes.iterrows():
+        with st.container():
+            c1, c2, c3 = st.columns([2, 2, 1])
             
-        with k_col2:
-            raw_buffer = st.session_state.keypad_buffer
-            if len(raw_buffer) == 3 and "." not in raw_buffer:
-                raw_buffer = f"{raw_buffer}.{raw_buffer[1:]}"
-            st.markdown(f"#### Typed Input: {raw_buffer}")
-            try:
-                val_input = float(raw_buffer)
-                norm_fat = round(val_input + 0.15, 2) if is_hand else round(val_input, 2)
-                st.write(f"📊 FAT Converted Standard: {norm_fat:.2f}s FAT")
-                if st.button("🎯 COMMIT & OK", use_container_width=True, type="primary"):
-                    st.session_state.active_session_logs.append({
-                        "log_id": f"LOG_L{len(st.session_state.workout_logs)+1}",
-                        "workout_id": "WORKOUT_ACTIVE", "athlete_id": target_id, "type": "20m_fly",
-                        "raw_input_time": val_input, "normalized_fat_time": norm_fat,
-                        "projected_100m": project_100m_dash(norm_fat, ath_info["gender"]),
-                        "is_pr": norm_fat < get_best_historical_fat(target_id),
-                        "date": datetime.today().strftime('%Y-%m-%d'), "display_name": f"{ath_info['first_name']} {ath_info['last_name']}"
-                    })
-                    st.session_state.active_athlete_input_id = None
-                    st.session_state.keypad_buffer = ""
-                    st.rerun()
-            except ValueError:
-                st.caption("Awaiting completed numbers...")
+            # Column 1: Athlete Name (Vertically padded to align with inputs)
+            with c1:
+                st.markdown(f"<div style='padding-top: 25px;'><strong>{athlete['name']}</strong></div>", unsafe_allow_html=True)
+            
+            # Column 2: Data Input (Hidden placeholder label for design alignment)
+            with c2:
+                raw_time = st.number_input(
+                    label=f"Split for {athlete['name']}", 
+                    min_value=0.0, 
+                    max_value=10.0, 
+                    step=0.01, 
+                    key=f"in_{athlete['id']}",
+                    label_visibility="collapsed"
+                )
+            
+            # Column 3: Action Submission Button
+            with c3:
+                st.markdown("<div style='padding-top: 15px;'>", unsafe_allow_html=True)
+                submit_btn = st.button("💾 Save", key=f"btn_{athlete['id']}", use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                # Form Processing Logic
+                if submit_btn:
+                    if raw_time > 0:
+                        # Applies FAT math using your global boolean `is_hand` variable
+                        fat_time = normalize_hand_fly(raw_time) if is_hand else raw_time
+                        
+                        # Project performance bounds based on session type
+                        proj = (
+                            calculate_projected_100m(4.5, fat_time, athlete['gender']) 
+                            if session_type == "20m_fly" 
+                            else calculate_projected_100m(fat_time, 2.3, athlete['gender'])
+                        )
+                        
+                        # Construct structured log history dictionary
+                        new_log = {
+                            "log_id": len(st.session_state.workout_logs) + 1,
+                            "date": datetime.today().strftime('%Y-%m-%d'),
+                            "athlete_id": athlete['id'],
+                            "type": session_type,
+                            "raw": raw_time,
+                            "fat": fat_time,
+                            "proj_100": proj
+                        }
+                        
+                        # Append directly into session dataframes
+                        st.session_state.workout_logs = pd.concat(
+                            [st.session_state.workout_logs, pd.DataFrame([new_log])], 
+                            ignore_index=True
+                        )
+                        
+                        # Temporary unobtrusive verification toast notification
+                        st.toast(f"✅ Logged {fat_time}s for {athlete['name']}!", icon="🏃💨")
+                        st.rerun()
+                    else:
+                        st.warning("Please enter a valid time above 0.00s.")
 
 # ==========================================
 # MODULE 3: TEAM LEADERBOARDS
@@ -631,7 +626,7 @@ elif app_portal == "🤝 4x100m Relay Builder" or app_portal == "🤝 4x100m Rel
     """, unsafe_allow_html=True)
 
 # ==========================================
-# MODULE 2: WORKOUT TRACKER
+# MODULE: WORKOUT TRACKER
 # ==========================================
 elif app_mode == "⏱️ Workout Tracker":
     st.title("⏱️ Live Workout Tracker")
