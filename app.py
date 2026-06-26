@@ -1016,6 +1016,8 @@ elif app_portal == "📄 AD Report Export":
 # ==========================================
 elif app_portal == "⏱️ Workout Tracker":
     st.title("⏱️ Live Workout Tracker")
+    
+    # 1. Top-Level Drill Controls
     col1, col2 = st.columns(2)
     with col1:
         timing_system = st.radio("Timing Method:", ["Electronic / FAT (Freelap)", "Hand-Timed (Stopwatch)"])
@@ -1024,51 +1026,84 @@ elif app_portal == "⏱️ Workout Tracker":
         
     st.write("---")
     
-    # Ensure baseline safety checks for athletes session storage dataframes
+    # 2. Guard Rail Safety Checks
     if 'athletes' not in st.session_state or st.session_state.athletes.empty:
         st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
     else:
-        # Standardize athlete handles to pull lowercase properties safely
+        # Standardize athlete handles to pull properties safely
         roster_view = st.session_state.athletes.copy()
         roster_view.columns = [str(c).lower() for c in roster_view.columns]
         
         id_key = 'id' if 'id' in roster_view.columns else roster_view.columns[0]
-        name_key = 'name' if 'name' in roster_view.columns else ([c for c in roster_view.columns if 'name' in c] + ['id'])[0]
+        
+        # Explicit Full Name targeting check to fix truncating/missing names
+        if 'full_name' in roster_view.columns:
+            name_key = 'full_name'
+        elif 'name' in roster_view.columns:
+            name_key = 'name'
+        else:
+            name_candidates = [c for c in roster_view.columns if 'name' in c]
+            name_key = name_candidates[0] if name_candidates else roster_view.columns[1]
+            
         gender_key = 'gender' if 'gender' in roster_view.columns else ('sex' if 'sex' in roster_view.columns else None)
 
+        # 3. Clean Table Header for Scannability
+        h1, h2, h3 = st.columns([4, 3, 2])
+        with h1: st.markdown("🗣️ **Athlete Roster Name**")
+        with h2: st.markdown("⏱️ **Enter Split / Time (s)**")
+        with h3: st.markdown("💾 **Action**")
+        st.write("")
+
+        # 4. Athlete Input Grid Rendering Loop
         for index, athlete in roster_view.iterrows():
-            athlete_id = athlete[id_key]
+            athlete_id = str(athlete[id_key]).strip()
             athlete_name = athlete[name_key]
-            athlete_gender = athlete[gender_key] if gender_key else 'male'
+            athlete_gender = str(athlete[gender_key]).lower() if gender_key and pd.notna(athlete[gender_key]) else 'male'
             
-            c1, c2, c3 = st.columns(3)
+            # Weighted column ratios [4, 3, 2] give names more horizontal breathing room
+            c1, c2, c3 = st.columns([4, 3, 2])
+            
             with c1:
-                st.write(f"**{athlete_name}**")
+                # Vertical alignment centering padding hack for clean layout row alignment
+                st.markdown(f"<div style='padding-top: 5px;'><b>{athlete_name}</b></div>", unsafe_allow_html=True)
+            
             with c2:
-                raw_time = st.number_input(f"Split (s)", min_value=0.0, max_value=10.0, step=0.01, key=f"in_{athlete_id}")
+                raw_time = st.number_input(
+                    label=f"Split for {athlete_name}", 
+                    min_value=0.0, 
+                    max_value=10.0, 
+                    step=0.01, 
+                    key=f"in_{athlete_id}",
+                    label_visibility="collapsed" # Hides annoying repetitive generated labels
+                )
+            
             with c3:
-                if st.button("Save Log", key=f"btn_{athlete_id}"):
-                    if raw_time > 0:
+                if st.button("Save Log", key=f"btn_{athlete_id}", use_container_width=True):
+                    if raw_time <= 0:
+                        st.error("⚠️ Please enter a valid time time above 0.00s.")
+                    else:
                         from datetime import datetime
                         
-                        # Apply fallback conversions if functions aren't universally available global scopes
+                        # Apply fallback stopwatch math rules safely
                         fat_time = raw_time
                         if timing_system == "Hand-Timed (Stopwatch)":
                             if 'normalize_hand_fly' in globals():
                                 fat_time = normalize_hand_fly(raw_time)
                             else:
-                                fat_time = raw_time + 0.24 # Traditional baseline conversion constant fallback
+                                fat_time = raw_time + 0.24 
                         
-                        # Project standard performance markers
+                        # Calculate accurate curve projections safely 
                         if 'calculate_projected_100m' in globals():
                             proj = calculate_projected_100m(4.5, fat_time, athlete_gender) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete_gender)
                         else:
-                            proj = (fat_time * 5.0) + 1.25 if session_type == "20m_fly" else 11.50 # Blueprint baseline approximations
+                            # Accurate fallbacks matching your system parameters
+                            proj = (fat_time * 5.0) + 1.25 if session_type == "20m_fly" else (fat_time * 2.5) + 2.0
                         
+                        # Generate Log Dictionary
                         new_log = {
-                            "log_id": len(st.session_state.workout_logs) + 1 if 'workout_logs' in st.session_state else 1,
+                            "log_id": len(st.session_state.workout_logs) + 1 if ('workout_logs' in st.session_state and not st.session_state.workout_logs.empty) else 1,
                             "date": datetime.today().strftime('%Y-%m-%d'),
-                            "athlete_id": str(athlete_id).strip(),
+                            "athlete_id": athlete_id,
                             "type": session_type,
                             "raw": float(raw_time),
                             "fat": float(fat_time),
@@ -1082,5 +1117,5 @@ elif app_portal == "⏱️ Workout Tracker":
                         else:
                             st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, log_entry_df], ignore_index=True)
                         
-                        st.success(f"✅ Logged entry mark for {athlete_name}!")
+                        st.toast(f"✅ Logged {fat_time:.2f}s for {athlete_name}!")
                         st.rerun()
