@@ -612,7 +612,7 @@ elif app_portal == "🤝 4x100m Relay Builder":
                 {"leg": 4, "name": leg4_row['name'], "role": "Anchor (Closer)", "metric_label": "Best 20m Fly", "time": leg4_row['best_fly']}
             ]
 
-    # --- UI DISPLAY: THE 4x100M CONFIGURATION GRID ---
+   # --- UI DISPLAY: THE 4x100M CONFIGURATION GRID ---
     st.subheader("🏆 Data-Optimized Relay Lineup Order")
     
     cols = st.columns(4)
@@ -622,11 +622,23 @@ elif app_portal == "🤝 4x100m Relay Builder":
             st.caption(f"🎭 {runner['role']}")
             with st.container(border=True):
                 st.markdown(f"🏃 **{runner['name']}**")
-                st.metric(label=runner['metric_label'], value=f"{runner['time']:.2f}s FAT")
+                
+                # --- SAFE TYPE CHECK & FORMATTING BLOCK ---
+                import math
+                val = runner['time']
+                
+                if val is not None and isinstance(val, (int, float)) and not math.isnan(val):
+                    formatted_value = f"{val:.2f}s FAT"
+                elif isinstance(val, str):
+                    formatted_value = val
+                else:
+                    formatted_value = "--"
+                
+                st.metric(label=runner['metric_label'], value=formatted_value)
 
     st.write("---")
     st.subheader("📏 Exchange Zone Go-Mark Target Analysis")
-
+    
     # --- MATHEMATICAL ENGINE: DYNAMIC GO-MARK GENERATION ---
     def calculate_go_mark(inc_fly, out_time):
         """
