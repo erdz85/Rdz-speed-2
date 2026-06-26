@@ -297,28 +297,37 @@ elif app_portal == "⏱️ Live Session Dashboard":
 
     # 3. Dynamic Athlete Logger Loop
     for index, athlete in st.session_state.athletes.iterrows():
+        # --- AUTOMATIC COLUMN NAME FIXER ---
+        # Forces all pandas row keys to lowercase behind the scenes to avoid KeyErrors
+        athlete_dict = {str(k).lower(): v for k, v in athlete.items()}
+        
+        a_name = athlete_dict.get('name', athlete_dict.get('athlete_name', 'Unknown Athlete'))
+        a_id = athlete_dict.get('id', athlete_dict.get('athlete_id', index))
+        a_gender = athlete_dict.get('gender', 'male') 
+        # -----------------------------------
+
         with st.container():
             c1, c2, c3 = st.columns([2, 2, 1])
             
             # Column 1: Athlete Name (Vertically padded to align with inputs)
             with c1:
-                st.markdown(f"<div style='padding-top: 25px;'><strong>{athlete['name']}</strong></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='padding-top: 25px;'><strong>{a_name}</strong></div>", unsafe_allow_html=True)
             
             # Column 2: Data Input (Hidden placeholder label for design alignment)
             with c2:
                 raw_time = st.number_input(
-                    label=f"Split for {athlete['name']}", 
+                    label=f"Split for {a_name}", 
                     min_value=0.0, 
                     max_value=10.0, 
                     step=0.01, 
-                    key=f"in_{athlete['id']}",
+                    key=f"in_{a_id}",
                     label_visibility="collapsed"
                 )
             
             # Column 3: Action Submission Button
             with c3:
                 st.markdown("<div style='padding-top: 15px;'>", unsafe_allow_html=True)
-                submit_btn = st.button("💾 Save", key=f"btn_{athlete['id']}", use_container_width=True)
+                submit_btn = st.button("💾 Save", key=f"btn_{a_id}", use_container_width=True)
                 st.markdown("</div>", unsafe_allow_html=True)
                 
                 # Form Processing Logic
@@ -329,16 +338,16 @@ elif app_portal == "⏱️ Live Session Dashboard":
                         
                         # Project performance bounds based on session type
                         proj = (
-                            calculate_projected_100m(4.5, fat_time, athlete['gender']) 
+                            calculate_projected_100m(4.5, fat_time, a_gender) 
                             if session_type == "20m_fly" 
-                            else calculate_projected_100m(fat_time, 2.3, athlete['gender'])
+                            else calculate_projected_100m(fat_time, 2.3, a_gender)
                         )
                         
                         # Construct structured log history dictionary
                         new_log = {
                             "log_id": len(st.session_state.workout_logs) + 1,
                             "date": datetime.today().strftime('%Y-%m-%d'),
-                            "athlete_id": athlete['id'],
+                            "athlete_id": a_id,
                             "type": session_type,
                             "raw": raw_time,
                             "fat": fat_time,
@@ -352,7 +361,7 @@ elif app_portal == "⏱️ Live Session Dashboard":
                         )
                         
                         # Temporary unobtrusive verification toast notification
-                        st.toast(f"✅ Logged {fat_time}s for {athlete['name']}!", icon="🏃💨")
+                        st.toast(f"✅ Logged {fat_time}s for {a_name}!", icon="🏃💨")
                         st.rerun()
                     else:
                         st.warning("Please enter a valid time above 0.00s.")
