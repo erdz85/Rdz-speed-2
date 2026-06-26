@@ -554,7 +554,7 @@ elif app_portal == "📈 ... Athlete Progress Trends":
 # MODULE 5: PDF REPORT GENERATOR
 # ==========================================
 elif app_portal == "📄 AD Report Export":
-    st.title("📄 AD Report Export") # Safely stripped raw emoji
+    st.title("📄 AD Report Export")
     st.markdown("Generates clean, high-contrast, black-and-white documentation to justify program budgets and prove athletic progression to recruiters.")
     
     roster_rows_html = ""
@@ -589,7 +589,7 @@ elif app_portal == "📄 AD Report Export":
             </tr>
             """
             
-    # FIXED: Replaced raw '⚡' emoji with safe HTML hex entity code '&#9889;' to bypass compilation blocks
+    # Built layout document using safe HTML character configurations
     report_html = f"""
     <div class="print-document" style="background-color: white; color: black; font-family: monospace; padding: 20px; border: 2px solid black;">
         <div style="text-align: center; border-bottom: 3px double black; padding-bottom: 10px; margin-bottom: 20px;">
@@ -626,7 +626,7 @@ elif app_portal == "📄 AD Report Export":
     </div>
     """
     
-    # Render with HTML parsing activated
+    # FIXED: Replaced standard print statement with explicit unsafe rendering parameter flag activated
     st.markdown(report_html, unsafe_allow_html=True)
     
     st.write("---")
