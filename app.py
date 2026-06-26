@@ -549,19 +549,28 @@ elif app_portal == "🤝 4x100m Relay Builder":
         # Standardize roster columns to lowercase as well just to be safe
         roster.columns = [str(c).lower() for c in roster.columns]
         
-        # Use lowercase matching keys
-        id_col = 'id' if 'id' in roster.columns else 'athlete_id'
-        name_col = 'name' if 'name' in roster.columns else 'athlete_name'
-        gender_col = 'gender' if 'gender' in roster.columns else 'sex'
+        # Smart dynamic identification keys for id and name
+        id_col = 'id' if 'id' in roster.columns else ('athlete_id' if 'athlete_id' in roster.columns else roster.columns[0])
         
+        # Bulletproof Name Resolution Strategy
+        if 'name' in roster.columns:
+            name_col = 'name'
+        else:
+            # Look for any column containing 'name' (e.g., 'athlete_name', 'first_name')
+            name_candidates = [c for c in roster.columns if 'name' in c]
+            name_col = name_candidates[0] if name_candidates else None
+
         roster = roster.merge(fly_df, left_on=id_col, right_index=True, how='left')
         roster = roster.merge(block_df, left_on=id_col, right_index=True, how='left')
         
-        # Ensure name handles are cleanly mapped for the lineup generation
-        if id_col != 'id': roster['id'] = roster[id_col]
-        if name_col != 'name': roster['name'] = roster[name_col]
-        a_gender = roster[gender_col].iloc[0] if gender_col in roster.columns else 'male'
-        
+        # Safe alignment back to fixed dictionary property names used by the UI layout loop
+        roster['id'] = roster[id_col]
+        if name_col:
+            roster['name'] = roster[name_col]
+        else:
+            # Ultimate safety fallback: label them by their ID strings if no name column exists
+            roster['name'] = "Athlete #" + roster['id'].astype(str)
+            
         # Drop individuals missing the core 20m fly profiles
         valid_pool = roster.dropna(subset=['best_fly']).copy()
         
