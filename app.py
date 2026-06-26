@@ -1170,11 +1170,8 @@ elif app_portal == "📆 Live Session Dashboard":
             fat_col = 'fat' if 'fat' in todays_logs.columns else todays_logs.columns[-2]
             todays_logs[fat_col] = pd.to_numeric(todays_logs[fat_col], errors='coerce')
             
-            # 4. Complete the DataFrame merge flawlessly
-            display_today = todays_logs.merge(roster_clean, left_on='athlete_id', right_on=right_key, how='left')
-            
             # ==========================================
-            # SECTION A: COMPILED SESSION MATRIX TRACKER
+            # COMPILED SESSION MATRIX TRACKER
             # ==========================================
             st.subheader("🏁 Compiled Today's Best Summary Matrix")
             st.markdown("The best recorded performance metrics per athlete captured during today's workspace window.")
@@ -1231,30 +1228,3 @@ elif app_portal == "📆 Live Session Dashboard":
                 with r3: st.markdown(f"<span style='color:#00E676;'>{block_str}</span>", unsafe_allow_html=True)
                 with r4: st.markdown(f"<span style='color:#00B0FF;'>{proj_str}</span>", unsafe_allow_html=True)
                 st.write("---")
-
-            # ==========================================
-            # SECTION B: LIVE REPETITION ACTIVITY LOGS STREAM
-            # ==========================================
-            st.write("")
-            st.subheader("📊 Live Activity Repetition Feed Stream")
-            
-            # Sort with newest entries showing up at the top of the feed layout
-            if 'log_id' in display_today.columns:
-                display_today = display_today.sort_values(by='log_id', ascending=False)
-            
-            for idx, row in display_today.iterrows():
-                athlete_display_name = row[name_key] if pd.notna(row[name_key]) else f"Athlete #{row['athlete_id']}"
-                drill_label = "⚡ 20m Fly" if row['type'] == "20m_fly" else "🧱 30m Block Start"
-                group_label = f"({row['group']})" if 'group' in row and pd.notna(row['group']) else ""
-                
-                with st.container(border=True):
-                    v1, v2, v3 = st.columns([4, 3, 2])
-                    with v1:
-                        st.markdown(f"🏃 **{athlete_display_name}** {group_label}")
-                        st.caption(f"Drill Profile: {drill_label}")
-                    with v2:
-                        st.markdown(f"### **{row[fat_col]:.2f}s FAT**")
-                    with v3:
-                        st.write("") 
-                        if 'proj_100' in row and pd.notna(row['proj_100']):
-                            st.markdown(f"🎯 *Rep Proj: {row['proj_100']:.2f}s*")
