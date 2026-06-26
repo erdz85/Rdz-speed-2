@@ -144,7 +144,7 @@ if app_portal == "👥 Roster & Onboarding Hub":
         
         with act_col1:
             st.markdown("**A. CSV/Excel Bulk Import Engine**")
-            uploaded_file = st.file_uploader("Drag and drop standard roster spreadsheets (Columns: first_name, last_name, gender, grade, status, group)", type=["csv"])
+            uploaded_file = st.file_uploader("Drag and drop standard roster spreadsheets", type=["csv"])
             if uploaded_file is not None:
                 try:
                     imported_df = pd.read_csv(uploaded_file)
@@ -152,72 +152,79 @@ if app_portal == "👥 Roster & Onboarding Hub":
                     if all(col in imported_df.columns for col in required_cols):
                         imported_df["athlete_id"] = [f"UUID_A{len(st.session_state.athletes) + i + 1}" for i in range(len(imported_df))]
                         st.session_state.athletes = pd.concat([st.session_state.athletes, imported_df[required_cols + ["athlete_id"]]], ignore_index=True)
-            st.success(f"Successfully appended {len(imported_df)} roster profiles via bulk data mapper link!")
-            st.rerun()
-        except Exception as e: 
-            st.error(f"Data stream fault: {str(e)}")
-            
-    with act_col2:
-        st.markdown("B. Custom Sub-Roster Architect")
-        new_group_lbl = st.text_input("Label Title:", placeholder="e.g., Jumpers Pool")
-        if st.button("➕ Create Training Group") and new_group_lbl:
-            if new_group_lbl not in st.session_state.training_groups:
-                st.session_state.training_groups.append(new_group_lbl)
-                st.success(f"Added sub-roster tracking channel: {new_group_lbl}")
-                st.rerun()
+                        st.success(f"Successfully appended {len(imported_df)} roster profiles via bulk data mapper link!")
+                        st.rerun()
+                    else: 
+                        st.error(f"Spreadsheet must strictly match schemas headers: {required_cols}")
+                except Exception as e: 
+                    st.error(f"Data stream fault: {str(e)}")
                 
-    with act_col3:
-        st.markdown("C. Automated Annual Roster Rollover")
-        st.warning("Resets senior graduation records, moves them to historical archive, and increments academic standing classes.")
-        if st.button("🔀 ARCHIVE SENIORS & ADVANCE GRADES", use_container_width=True):
-            active_undergrads = st.session_state.athletes[st.session_state.athletes["grade"] < 12].copy()
-            active_undergrads["grade"] = active_undergrads["grade"] + 1
-            st.session_state.athletes = active_undergrads.reset_index(drop=True)
-            st.success("Rollover processing finalized! Database adjusted, clean, and optimized for the next track year sequence.")
-            st.rerun()
-
-    # Display Control Center Matrix Core Rows
-    st.markdown("---")
-    st.subheader("📋 Coach's Control Center Dashboard Matrix")
-    group_view = st.selectbox("Group Filter View Routing Toggle:", ["All"] + st.session_state.training_groups)
-    display_set = st.session_state.athletes.copy()
-    if group_view != "All":
-        display_set = display_set[display_set["group"] == group_view]
-        
-    for _, row in display_set.iterrows():
-        a_id = row["athlete_id"]
-        best_fly = get_best_historical_fat(a_id, "20m_fly")
-        best_fly_str = f"{best_fly:.2f}s FAT" if best_fly != float('inf') else "N/A"
-        
-        st.markdown(f"""
-        <div class="metric-card">
-            <b>👤 {row['last_name']}, {row['first_name']} (Grade {row['grade']})</b><br>
-            • Best Season 20m Fly Metric parameter: {best_fly_str}<br>
-            <span class="badge-tag-varsity">{row['status'].upper()}</span>
-            <span class="badge-tag-group">{row['group'].upper()}</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        m_c1, m_c2 = st.columns(2)
-        with m_c1: 
-            new_g = st.selectbox("➡️ Move to Group...", st.session_state.training_groups, index=st.session_state.training_groups.index(row["group"]) if row["group"] in st.session_state.training_groups else 0, key=f"sel_{a_id}")
-        with m_c2:
-            if st.button("Commit Group Move", key=f"mov_btn_{a_id}"):
-                st.session_state.athletes.loc[st.session_state.athletes["athlete_id"] == a_id, "group"] = new_g
-                st.success(f"Shifted group alignment parameters for {row['first_name']}")
+        with act_col2:
+            st.markdown("**B. Custom Sub-Roster Architect**")
+            new_group_lbl = st.text_input("Label Title:", placeholder="e.g., Jumpers Pool")
+            if st.button("➕ Create Training Group") and new_group_lbl:
+                if new_group_lbl not in st.session_state.training_groups:
+                    st.session_state.training_groups.append(new_group_lbl)
+                    st.success(f"Added sub-roster tracking channel: {new_group_lbl}")
+                    st.rerun()
+                    
+        with act_col3:
+            st.markdown("**C. Automated Annual Roster Rollover**")
+            st.warning("Resets senior graduation records, moves them to historical archive, and increments academic standing classes.")
+            if st.button("🔀 ARCHIVE SENIORS & ADVANCE GRADES", use_container_width=True):
+                active_undergrads = st.session_state.athletes[st.session_state.athletes["grade"] < 12].copy()
+                active_undergrads["grade"] = active_undergrads["grade"] + 1
+                st.session_state.athletes = active_undergrads.reset_index(drop=True)
+                st.success("Rollover processing finalized! Database adjusted, clean, and optimized for the next track year season.")
                 st.rerun()
+
+        # Display Control Center Matrix Rows
+        st.markdown("---")
+        st.subheader("📋 Coach's Control Center Dashboard Matrix")
+        group_view = st.selectbox("Group Filter View Routing Toggle:", ["All"] + st.session_state.training_groups)
+        
+        display_set = st.session_state.athletes.copy()
+        if group_view != "All":
+            display_set = display_set[display_set["group"] == group_view]
+            
+        for _, row in display_set.iterrows():
+            a_id = row["athlete_id"]
+            best_fly = get_best_historical_fat(a_id, "20m_fly")
+            best_fly_str = f"{best_fly:.2f}s FAT" if best_fly != float('inf') else "N/A"
+            
+            st.markdown(f"""
+            <div class='metric-card'>
+                <div style='display: flex; justify-content: space-between; align-items: center;'>
+                    <div>
+                        <b>👤 {row['last_name']}, {row['first_name']} (Grade {row['grade']})</b><br>
+                        • Best Season 20m Fly Parameter: {best_fly_str}<br>
+                        <span class="badge-tag-varsity">{row['status'].upper()}</span>
+                        <span class="badge-tag-group">{row['group'].upper()}</span>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            m_c1, m_c2 = st.columns(2)
+            with m_c1: 
+                new_g = st.selectbox("➡️ Move to Group...", st.session_state.training_groups, index=st.session_state.training_groups.index(row["group"]) if row["group"] in st.session_state.training_groups else 0, key=f"sel_{a_id}")
+            with m_c2: 
+                if st.button("Commit Group Move", key=f"mov_btn_{a_id}"):
+                    st.session_state.athletes.loc[st.session_state.athletes["athlete_id"] == a_id, "group"] = new_g
+                    st.success(f"Shifted group alignment parameters for {row['first_name']}")
+                    st.rerun()
 
 # ==========================================
-# MODULE 2: LIVE SESSION DASHBOARD (WITH DYNAMIC SUB-ROSTER FILTERING)
+# MODULE 2: LIVE SESSION DASHBOARD
 # ==========================================
 elif app_portal == "⏱️ Live Session Dashboard":
     st.title("⏱️ Live Session Tracker")
+    
     st.markdown("#### 🎯 Filter Active Lane Lines By Event Group Assignment")
     active_group_filter = st.selectbox("Select Active Group At Sprints Line:", ["All Active Roster"] + st.session_state.training_groups)
     
     col_h1, col_h2 = st.columns(2)
-    with col_h1: 
-        st.subheader("🗓️ CURRENT WORKOUT: Max Velocity Flys")
+    with col_h1: st.subheader("🗓️ CURRENT WORKOUT: Max Velocity Flys")
     with col_h2:
         if st.button("🔴 END ACTIVE SESSION", use_container_width=True):
             if st.session_state.active_session_logs:
@@ -226,7 +233,7 @@ elif app_portal == "⏱️ Live Session Dashboard":
                 st.success("Session saved successfully!")
             else: 
                 st.warning("No runs logged yet.")
-                
+            
     search_query = st.text_input("🔍 Quick Search Athlete...", "").strip().lower()
     
     roster_working_subset = st.session_state.athletes.copy()
@@ -237,30 +244,38 @@ elif app_portal == "⏱️ Live Session Dashboard":
     
     for _, athlete in roster_working_subset.iterrows():
         full_name = f"{athlete['first_name']} {athlete['last_name']}"
-        if search_query and search_query not in full_name.lower(): 
-            continue
+        if search_query and search_query not in full_name.lower(): continue
+        
         a_id = athlete["athlete_id"]
+        # Roster loop logic execution parameters
         past_logs = st.session_state.workout_logs[st.session_state.workout_logs["athlete_id"] == a_id]
         last_time_str = f"{past_logs.iloc[-1]['raw_input_time']:.2f}s" if not past_logs.empty else "N/A"
         
         r_col1, r_col2 = st.columns(2)
-        with r_col1: 
+        with r_col1:
             st.markdown(f"👤 {athlete['last_name']}, {athlete['first_name']} [Last Run: {last_time_str}]")
         with r_col2:
             if st.button(f"Enter Time", key=f"btn_{a_id}", use_container_width=True):
                 st.session_state.active_athlete_input_id = a_id
                 st.session_state.keypad_buffer = ""
                 st.rerun()
-                
-    # Smart Keypad Interceptor Panel
+
+    # Smart Keypad Interceptor Panel (Active UI Form overlay)
     if st.session_state.active_athlete_input_id:
         target_id = st.session_state.active_athlete_input_id
-        ath_info = st.session_state.athletes[st.session_state.athletes["athlete_id"] == target_id].iloc
-        st.markdown(f"### 🎛️ Smart Keypad: {ath_info['first_name']} {ath_info['last_name']}")
         
+        # FIXED: Extraction index assignment targeting data row records directly
+        ath_info = st.session_state.athletes[st.session_state.athletes["athlete_id"] == target_id].iloc[0]
+        
+        st.markdown(f"### 🎛️ Smart Keypad: {ath_info['first_name']} {ath_info['last_name']}")
         k_col1, k_col2 = st.columns([2, 1.2])
+        
         with k_col1:
-            row1 = st.columns(3); row2 = st.columns(3); row3 = st.columns(3); row4 = st.columns(3)
+            row1 = st.columns(3)
+            row2 = st.columns(3)
+            row3 = st.columns(3)
+            row4 = st.columns(3)
+            
             if row1.button("1", key="k1", use_container_width=True): st.session_state.keypad_buffer += "1"; st.rerun()
             if row1.button("2", key="k2", use_container_width=True): st.session_state.keypad_buffer += "2"; st.rerun()
             if row1.button("3", key="k3", use_container_width=True): st.session_state.keypad_buffer += "3"; st.rerun()
@@ -276,30 +291,35 @@ elif app_portal == "⏱️ Live Session Dashboard":
             
         with k_col2:
             raw_buffer = st.session_state.keypad_buffer
-            if len(raw_buffer) == 3 and "." not in raw_buffer: 
-                raw_buffer = f"{raw_buffer}.{raw_buffer[1:]}"
-            st.markdown(f"#### Typed Input: {raw_buffer}")
+            
+            # Auto-parsing logic formatting rule for rapid typing sequences
+            if len(raw_buffer) == 3 and "." not in raw_buffer:
+                raw_buffer = f"{raw_buffer[0]}.{raw_buffer[1:]}"
+                
+            st.markdown(f"#### Typed Input: `{raw_buffer}`")
+            
             try:
                 val_input = float(raw_buffer)
                 norm_fat = round(val_input + 0.15, 2) if is_hand else round(val_input, 2)
-                st.write(f"📊 FAT Converted Standard: {norm_fat:.2f}s FAT")
+                st.write(f"📊 FAT Converted Standard: **{norm_fat:.2f}s FAT**")
+                
                 if st.button("🎯 COMMIT & OK", use_container_width=True, type="primary"):
                     st.session_state.active_session_logs.append({
                         "log_id": f"LOG_L{len(st.session_state.workout_logs)+1}",
-                        "workout_id": "WORKOUT_ACTIVE", 
-                        "athlete_id": target_id, 
+                        "workout_id": "WORKOUT_ACTIVE",
+                        "athlete_id": target_id,
                         "type": "20m_fly",
-                        "raw_input_time": val_input, 
+                        "raw_input_time": val_input,
                         "normalized_fat_time": norm_fat,
                         "projected_100m": project_100m_dash(norm_fat, ath_info["gender"]),
                         "is_pr": norm_fat < get_best_historical_fat(target_id),
-                        "date": datetime.today().strftime('%Y-%m-%d'), 
+                        "date": datetime.today().strftime('%Y-%m-%d'),
                         "display_name": f"{ath_info['first_name']} {ath_info['last_name']}"
                     })
                     st.session_state.active_athlete_input_id = None
                     st.session_state.keypad_buffer = ""
                     st.rerun()
-            except ValueError: 
+            except ValueError:
                 st.caption("Awaiting completed numbers...")
 
 # ==========================================
