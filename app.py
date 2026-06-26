@@ -116,11 +116,11 @@ is_hand = timing_method == "Hand-Timed"
 
 app_portal = st.sidebar.radio("Go To Module Portal:", [
     "👥 Roster & Onboarding Hub",
+    "⏱️ Workout Tracker",   
     "📆 Live Session Dashboard",
-    "⏱️ Workout Tracker",
-    "🏆 Team Leaderboards", 
-    "📈 ... Athlete Progress Trends",
     "🤝 4x100m Relay Builder",
+    "📈 Athlete Progress Trends",
+    "🏆 Team Leaderboards", 
     "📄 AD Report Export"
 ])
 
@@ -535,103 +535,176 @@ elif app_portal == "🏆 Team Leaderboards":
                             st.info(f"🔥 Hot Streak")
                             
 # ==========================================
-# MODULE 4: ATHLETE PROGRESS SCREEN
+# MODULE 4: ATHLETE PROGRESS TRENDS
 # ==========================================
-elif app_portal == "📈 ... Athlete Progress Trends":
-    # Formulate selection options from state schemas
-    athlete_options = {f"{row['first_name']} {row['last_name']}": row['athlete_id'] for _, row in st.session_state.athletes.iterrows()}
-    selected_display = st.selectbox("🔍 Select Profile for Analytical Deep Dive:", list(athlete_options.keys()))
-    target_athlete_id = athlete_options[selected_display]
-    
-    # Securely isolate single athlete data rows
-    ath_row = st.session_state.athletes[st.session_state.athletes["athlete_id"] == target_athlete_id].iloc[0]
-    st.markdown(f"### 👤 ATHLETE PROFILE: {ath_row['first_name']} {ath_row['last_name']} ({ath_row['status'].title()})")
-    
-    # Render wireframe trend filtering switches
-    metric_trend = st.radio("Select Target Metric Trend Line:", ["● 20m Fly Trend", "◯ 30m Block Trend"], horizontal=True)
-    target_type = "20m_fly" if "20m Fly" in metric_trend else "30m_block"
-    
-    raw_logs = st.session_state.workout_logs[
-        (st.session_state.workout_logs["athlete_id"] == target_athlete_id) & 
-        (st.session_state.workout_logs["type"] == target_type)
-    ].copy()
-    
-    if raw_logs.empty:
-        st.warning(f"No logged performance metrics found in database schemas for {metric_trend} entries.")
+elif app_portal == "📈 Athlete Progress Trends":
+    st.title("📈 The Athlete Progress Screen (Analytical Deep Dive)")
+    st.markdown("Designed for individual player development meetings, tracking health/fatigue, and presenting progress profiles to parents or college recruiters.")
+
+    # --- GUARD RAILS: ENSURE DATA EXISTENCE ---
+    if 'athletes' not in st.session_state or st.session_state.athletes.empty:
+        st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
+    elif 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
+        st.info("ℹ️ No speed progression metrics found. Log repetitions in the Workout Tracker to populate analytics.")
     else:
-        # BACKEND LOGIC: The Peak Performance Filter (Translating the SQL Weekly Grouping Rule)
-        raw_logs["date_parsed"] = pd.to_datetime(raw_logs["date"])
-        raw_logs["training_week"] = raw_logs["date_parsed"].dt.isocalendar().week
+        # Standardize DataFrames to prevent casing errors
+        roster_clean = st.session_state.athletes.copy()
+        roster_clean.columns = [str(c).lower() for c in roster_clean.columns]
         
-        # Select minimum/fastest FAT time per athlete per tracking calendar week boundary
-        filtered_progress = raw_logs.loc[raw_logs.groupby("training_week")["normalized_fat_time"].idxmin()].sort_values(by="date")
-        current_pr = filtered_progress["normalized_fat_time"].min()
-        
-        # Clean 12-Week Linear Progression Charting Model
-        fig_deep = px.line(
-            filtered_progress, x="date", y="normalized_fat_time", markers=True, text="normalized_fat_time",
-            labels={"normalized_fat_time": "Time (Seconds FAT)", "date": "Weekly Session Trajectory Marker"},
-            title=f"Documented Speed Progression Over Time [Current PR: {current_pr:.2f}s]"
-        )
-        fig_deep.update_yaxes(autorange="reverse")
-        fig_deep.update_traces(textposition="top center", marker=dict(size=10, color="#ff4b4b"))
-        st.plotly_chart(fig_deep, use_container_width=True)
-        
-        # Mathematical compilation engine derivations
-        initial_time = filtered_progress["normalized_fat_time"].iloc[0]
-        latest_time = filtered_progress["normalized_fat_time"].iloc[-1]
-        total_improvement = round(initial_time - latest_time, 2)
-        
-        # Compute dynamic multi-split projection tiers
-        best_overall_fly = get_best_historical_fat(target_athlete_id, "20m_fly")
-        projected_100m_val = project_100m_dash(best_overall_fly, ath_row["gender"])
-        
-        # Relay Leg Mapping Logic based on max velocity thresholds
-        if best_overall_fly < 2.15:
-            optimal_relay_leg = "Leg 2 or Leg 4 (Max Velocity Peak)"
+        logs_clean = st.session_state.workout_logs.copy()
+        logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
+
+        # ID & Name Column Resolutions
+        id_key = 'id' if 'id' in roster_clean.columns else roster_clean.columns[0]
+        if 'full_name' in roster_clean.columns:
+            name_key = 'full_name'
+        elif 'name' in roster_clean.columns:
+            name_key = 'name'
         else:
-            optimal_relay_leg = "Leg 1 or Leg 3 (Curve / Acceleration Bias)"
+            name_candidates = [c for c in roster_clean.columns if 'name' in c]
+            name_key = name_candidates[0] if name_candidates else roster_clean.columns[1]
             
-        # Automated single-workout CNS fatigue parser engine logic
-        # Evaluates time decay of the last three reps recorded on the same date sequence
-        fatigue_triggered = False
-        fatigue_percentage = 0.0
+        gender_key = 'gender' if 'gender' in roster_clean.columns else ('sex' if 'sex' in roster_clean.columns else None)
+
+        # --- DROP-DOWN SELECTOR: TARGET ATHLETE PROFILE ---
+        athlete_mapping = {row[name_key]: str(row[id_key]).strip() for _, row in roster_clean.iterrows()}
+        selected_athlete_name = st.selectbox("👤 Select Athlete Profile to Review:", list(athlete_mapping.keys()))
+        selected_id = athlete_mapping[selected_athlete_name]
+
+        # Isolate individual metrics
+        athlete_meta = roster_clean[roster_clean[id_key].astype(str).str.strip() == selected_id].iloc[0]
+        athlete_logs = logs_clean[logs_clean['athlete_id'].astype(str).str.strip() == selected_id].copy()
         
-        latest_session_date = raw_logs["date"].max()
-        session_reps = raw_logs[raw_logs["date"] == latest_session_date].sort_index()
+        # Parse Dates safely for time-series charts
+        athlete_logs['date'] = pd.to_datetime(athlete_logs['date'])
+        athlete_logs = athlete_logs.sort_values(by='date')
+
+        fat_col = 'fat' if 'fat' in athlete_logs.columns else athlete_logs.columns[-2]
+        athlete_logs[fat_col] = pd.to_numeric(athlete_logs[fat_col], errors='coerce')
+
+        # --- UI PROFILE HEADER CONTAINER ---
+        st.write("")
+        grade_str = f"• Grade {athlete_meta['grade']}" if 'grade' in athlete_meta and pd.notna(athlete_meta['grade']) else ""
+        group_str = f"• {athlete_meta['group']}" if 'group' in athlete_meta and pd.notna(athlete_meta['group']) else "Short Sprinters"
+        gender_val = str(athlete_meta[gender_key]).lower() if gender_key and pd.notna(athlete_meta[gender_key]) else 'male'
         
-        if len(session_reps) >= 3:
-            fastest_rep = session_reps["normalized_fat_time"].min()
-            last_rep = session_reps["normalized_fat_time"].iloc[-1]
-            if fastest_rep > 0:
-                fatigue_percentage = ((last_rep - fastest_rep) / fastest_rep) * 100
-                if fatigue_percentage >= 3.0:
+        with st.container(border=True):
+            st.markdown(f"## 👤 {selected_athlete_name.upper()}")
+            st.markdown(f"**Roster Profile Tier:** Class: {athlete_meta.get('tier', 'Varsity Athlete').title()} {grade_str} {group_str}")
+
+        # --- UI SELECTOR: PROGRESS CHART TOGGLES ---
+        st.write("")
+        chart_view = st.radio(
+            label="Select Analytical Tracking Dimension:",
+            options=["⚡ 20m Fly Trend", "🧱 30m Block Trend", "⏱️ 100m, 200m & 400m Projection Forecasts"],
+            horizontal=True
+        )
+
+        # --- TREND ENGINE CHART RENDERING ---
+        if "20m Fly Trend" in chart_view:
+            fly_data = athlete_logs[athlete_logs['type'] == '20m_fly']
+            if fly_data.empty:
+                st.info(f"ℹ️ No 20m Fly repetitions logged on file for {selected_athlete_name}.")
+            else:
+                # Group by date to show clean progression timeline
+                fly_timeline = fly_data.groupby('date')[fat_col].min()
+                st.subheader("📈 20m Fly Progression Timeline")
+                st.line_chart(fly_timeline)
+                
+        elif "30m Block Trend" in chart_view:
+            block_data = athlete_logs[athlete_logs['type'] == '30m_block']
+            if block_data.empty:
+                st.info(f"ℹ️ No 30m Block starts logged on file for {selected_athlete_name}.")
+            else:
+                block_timeline = block_data.groupby('date')[fat_col].min()
+                st.subheader("📈 30m Block Start Progression Timeline")
+                st.line_chart(block_timeline)
+                
+        else: # 100m, 200m & 400m Dash Projections Line Graph
+            fly_logs = athlete_logs[athlete_logs['type'] == '20m_fly'].copy()
+            if fly_logs.empty:
+                st.info("ℹ️ Projections line graph requires historical 20m Fly data entries.")
+            else:
+                st.subheader("⏱️ Multi-Event Dash Recruitment Projections Forecast")
+                
+                # Dynamic generation of 100/200/400 curves based on best fly points over time
+                proj_timeline = fly_logs.groupby('date')[fat_col].min().reset_index()
+                
+                # Apply gender specific velocity-decay multiplication modeling factors
+                if 'female' in gender_val:
+                    proj_timeline['100m Proj'] = (proj_timeline[fat_col] * 5.10) + 1.40
+                    proj_timeline['200m Proj'] = proj_timeline['100m Proj'] * 2.05
+                    proj_timeline['400m Proj'] = proj_timeline['100m Proj'] * 4.65
+                else:
+                    proj_timeline['100m Proj'] = (proj_timeline[fat_col] * 4.95) + 1.20
+                    proj_timeline['200m Proj'] = proj_timeline['100m Proj'] * 1.98
+                    proj_timeline['400m Proj'] = proj_timeline['100m Proj'] * 4.40
+                
+                chart_df = proj_timeline.set_index('date')[['100m Proj', '200m Proj', '400m Proj']]
+                st.line_chart(chart_df)
+
+        # --- INSIGHTS ENGINE: COGNITIVE BIO-ANALYTICS ---
+        st.write("---")
+        st.subheader("📊 Season Insights & Recruiting Analytics")
+        
+        if athlete_logs.empty:
+            st.caption("Awaiting performance records to initialize coaching analytics insights.")
+        else:
+            # 1. Compute Total Improvement
+            first_rep = athlete_logs[fat_col].iloc[0]
+            best_rep = athlete_logs[fat_col].min()
+            total_diff = best_rep - first_rep
+            
+            # 2. Get baseline metrics for metrics calculation rules
+            best_fly_all_time = athlete_logs[athlete_logs['type'] == '20m_fly'][fat_col].min()
+            best_block_all_time = athlete_logs[athlete_logs['type'] == '30m_block'][fat_col].min()
+            
+            # Generate stable contextual projection variables
+            calc_fly = best_fly_all_time if pd.notna(best_fly_all_time) else (best_block_all_time / 1.95 if pd.notna(best_block_all_time) else 2.20)
+            
+            if 'female' in gender_val:
+                est_100 = (calc_fly * 5.10) + 1.40
+                d1_cutoff = 11.85
+                tier_string = "State Finalist Tier" if est_100 < 12.20 else ("Varsity Standard" if est_100 < 12.90 else "Developing Tier")
+            else:
+                est_100 = (calc_fly * 4.95) + 1.20
+                d1_cutoff = 10.65
+                tier_string = "Elite State Tier" if est_100 < 10.90 else ("Varsity Point Scorer" if est_100 < 11.50 else "Developing Tier")
+
+            # 3. AUTOMATED CNS FATIGUE DETECTION ENGINE (Last 3 reps comparison check)
+            fatigue_triggered = False
+            if len(athlete_logs) >= 3:
+                recent_reps = athlete_logs.tail(3)[fat_col].values
+                # Check if reps are progressively climbing / slowing down significantly
+                if recent_reps[2] > (recent_reps[0] * 1.03):
                     fatigue_triggered = True
 
-        # Output Layout Render for Season Insights
-        st.markdown("### 📊 SEASON INSIGHTS & ANALYTICS")
-        st.markdown(f"""
-        <ul class="insight-list">
-            <li><b>Total Improvement:</b> {total_improvement:+.2f} seconds since early seasonal tracking.</li>
-            <li><b>Projected 100m FAT:</b> {projected_100m_val:.2f} seconds ({"State Finalist Tier" if projected_100m_val < 11.00 else "Regional Tier Level"}).</li>
-            <li><b>Optimal Relay Leg:</b> {optimal_relay_leg}.</li>
-        </ul>
-        """, unsafe_allow_html=True)
-        
-        # Render conditional alerting components dynamically
-        if fatigue_triggered:
-            st.markdown(f"""
-            <div style="background-color: #f8d7da; border-left: 5px solid #d9534f; padding: 15px; border-radius: 5px; margin-bottom: 15px; color: #721c24;">
-                <span class="badge-fatigue">⚠️ CNS Fatigue Detected</span> 
-                Last reps dropped by <b>{fatigue_percentage:.1f}%</b> from peak intra-workout parameters. Pull athlete from active reps to preserve hamstring health.
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div style="background-color: #d4edda; border-left: 5px solid #2ecc71; padding: 15px; border-radius: 5px; margin-bottom: 15px; color: #155724;">
-                ✅ <b>CNS Recovery Stable:</b> Intra-workout performance distribution parameters reside safely inside healthy thresholds (<3% decay).
-            </div>
-            """, unsafe_allow_html=True)
+            # 4. PREDICTIVE MILESTONE INDICATORS
+            gap_to_d1 = est_100 - d1_cutoff
+
+            # --- RENDER SUMMARY ROW CARDS INSIGHTS MATRIX ---
+            i_col1, i_col2 = st.columns(2)
+            with i_col1:
+                st.markdown(f"• **Total Improvement:** `{total_diff:.2f}s` since initial baseline testing entry.")
+                st.markdown(f"• **Projected 100m FAT:** `{est_100:.2f} seconds` ({tier_string})")
+                
+                if gap_to_d1 > 0:
+                    st.markdown(f"🎯 **Milestone Tracker:** You are `{gap_to_d1:.2f}s` away from entering the **NCAA D1 Recruitment Standard** limit baseline.")
+                else:
+                    st.markdown("🎯 **Milestone Tracker:** 🎉 Performance markers match **NCAA D1 Elite Recruiting Metrics Profile thresholds**.")
+            
+            with i_col2:
+                # Suggest tactical relay assignments based on strengths
+                if best_fly_all_time and (best_block_all_time is None or best_fly_all_time < 2.10):
+                    st.markdown("• **Optimal Relay Leg:** `Leg 2 or Leg 4` (Max Velocity Acceleration Specialist Profile)")
+                else:
+                    st.markdown("• **Optimal Relay Leg:** `Leg 1 or Leg 3` (Elite Curve Acceleration Block Profile)")
+                
+                # Render Fatigue Warning Badges
+                if fatigue_triggered:
+                    st.warning("⚠️ **CNS Fatigue Warning:** Performance velocity has dropped >3% over consecutive reps. High hamstring risk detected. **Coaching Guidance: Pull from active max-effort drilling, require rest.**")
+                else:
+                    st.success("✅ **CNS Muscle Readiness:** Central Nervous System recovery markers are green. No performance decay indicators flagged.")
 
 # ==========================================
 # MODULE 5: 4x100m RELAY BUILDER
