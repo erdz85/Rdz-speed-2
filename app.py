@@ -247,7 +247,7 @@ elif app_portal == "⏱️ Live Session Dashboard":
         if search_query and search_query not in full_name.lower(): continue
         
         a_id = athlete["athlete_id"]
-        # Roster loop logic execution parameters
+                # Roster loop logic execution parameters
         past_logs = st.session_state.workout_logs[st.session_state.workout_logs["athlete_id"] == a_id]
         last_time_str = f"{past_logs.iloc[-1]['raw_input_time']:.2f}s" if not past_logs.empty else "N/A"
         
@@ -264,7 +264,7 @@ elif app_portal == "⏱️ Live Session Dashboard":
     if st.session_state.active_athlete_input_id:
         target_id = st.session_state.active_athlete_input_id
         
-        # FIXED: Extraction index assignment targeting data row records directly
+        # Fixed index target row extraction
         ath_info = st.session_state.athletes[st.session_state.athletes["athlete_id"] == target_id].iloc[0]
         
         st.markdown(f"### 🎛️ Smart Keypad: {ath_info['first_name']} {ath_info['last_name']}")
@@ -276,18 +276,22 @@ elif app_portal == "⏱️ Live Session Dashboard":
             row3 = st.columns(3)
             row4 = st.columns(3)
             
-            if row1.button("1", key="k1", use_container_width=True): st.session_state.keypad_buffer += "1"; st.rerun()
-            if row1.button("2", key="k2", use_container_width=True): st.session_state.keypad_buffer += "2"; st.rerun()
-            if row1.button("3", key="k3", use_container_width=True): st.session_state.keypad_buffer += "3"; st.rerun()
-            if row2.button("4", key="k4", use_container_width=True): st.session_state.keypad_buffer += "4"; st.rerun()
-            if row2.button("5", key="k5", use_container_width=True): st.session_state.keypad_buffer += "5"; st.rerun()
-            if row2.button("6", key="k6", use_container_width=True): st.session_state.keypad_buffer += "6"; st.rerun()
-            if row3.button("7", key="k7", use_container_width=True): st.session_state.keypad_buffer += "7"; st.rerun()
-            if row3.button("8", key="k8", use_container_width=True): st.session_state.keypad_buffer += "8"; st.rerun()
-            if row3.button("9", key="k9", use_container_width=True): st.session_state.keypad_buffer += "9"; st.rerun()
-            if row4.button(".", key="k_dot", use_container_width=True): st.session_state.keypad_buffer += "."; st.rerun()
-            if row4.button("0", key="k0", use_container_width=True): st.session_state.keypad_buffer += "0"; st.rerun()
-            if row4.button("⌫ Clear", key="k_clear", use_container_width=True): st.session_state.keypad_buffer = ""; st.rerun()
+            # Fixed column list index targets, [1], [2]
+            if row1[0].button("1", key="k1", use_container_width=True): st.session_state.keypad_buffer += "1"; st.rerun()
+            if row1[1].button("2", key="k2", use_container_width=True): st.session_state.keypad_buffer += "2"; st.rerun()
+            if row1[2].button("3", key="k3", use_container_width=True): st.session_state.keypad_buffer += "3"; st.rerun()
+            
+            if row2[0].button("4", key="k4", use_container_width=True): st.session_state.keypad_buffer += "4"; st.rerun()
+            if row2[1].button("5", key="k5", use_container_width=True): st.session_state.keypad_buffer += "5"; st.rerun()
+            if row2[2].button("6", key="k6", use_container_width=True): st.session_state.keypad_buffer += "6"; st.rerun()
+            
+            if row3[0].button("7", key="k7", use_container_width=True): st.session_state.keypad_buffer += "7"; st.rerun()
+            if row3[1].button("8", key="k8", use_container_width=True): st.session_state.keypad_buffer += "8"; st.rerun()
+            if row3[2].button("9", key="k9", use_container_width=True): st.session_state.keypad_buffer += "9"; st.rerun()
+            
+            if row4[0].button(".", key="k_dot", use_container_width=True): st.session_state.keypad_buffer += "."; st.rerun()
+            if row4[1].button("0", key="k0", use_container_width=True): st.session_state.keypad_buffer += "0"; st.rerun()
+            if row4[2].button("⌫ Clear", key="k_clear", use_container_width=True): st.session_state.keypad_buffer = ""; st.rerun()
             
         with k_col2:
             raw_buffer = st.session_state.keypad_buffer
