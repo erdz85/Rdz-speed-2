@@ -404,13 +404,23 @@ elif app_portal == "🏆 Team Leaderboards":
         roster = st.session_state.athletes.copy()
         roster.columns = [str(c).lower() for c in roster.columns]
         id_col = 'id' if 'id' in roster.columns else ('athlete_id' if 'athlete_id' in roster.columns else roster.columns[0])
-        name_col = 'name' if 'name' in roster.columns.values else ([c for c in roster.columns if 'name' in c] + ['id'])[0]
         
-        # Normalize baseline text matching keys
-        if 'name' not in roster.columns: roster['name'] = roster[name_col]
-        if 'id' not in roster.columns: roster['id'] = roster[id_col]
+        # Smart full name detection check
+        if 'name' in roster.columns:
+            name_col = 'name'
+        elif 'full_name' in roster.columns:
+            name_col = 'full_name'
+        elif 'athlete_name' in roster.columns:
+            name_col = 'athlete_name'
+        else:
+            name_candidates = [c for c in roster.columns if 'name' in c]
+            name_col = name_candidates[0] if name_candidates else roster.columns[1]
+        
+        # Set normalized identifier columns
+        roster['name'] = roster[name_col]
+        roster['id'] = roster[id_col].astype(str).str.strip()
 
-        # Apply Sidebar/Drop-down Demographic Filters to Roster Pool
+        # Apply demographic filters to Roster Pool
         if gender_filter != "All" and 'gender' in roster.columns:
             roster = roster[roster['gender'].astype(str).str.lower() == gender_filter.lower()]
         if 'tier' in roster.columns:
@@ -433,43 +443,49 @@ elif app_portal == "🏆 Team Leaderboards":
             suffix = "s FAT"
             badge_text = "Power Start"
             
-        else: # Projected 100m calculation fallback
+        else: # Projected 100m calculation
             st.subheader("⏱️ Projected 100m Dash Leaderboard")
-            # Pull minimum fly to run a classic high-velocity curve estimation profile formula
             metric_df = logs[logs[type_col] == '20m_fly'].groupby('athlete_id')[fat_col].min().reset_index()
-            # Classic speed development equation: (Fly * 5) + 1.25s block transition factor
             metric_df[fat_col] = (metric_df[fat_col] * 5.0) + 1.25
             suffix = "s (Est)"
             badge_text = "Projected"
 
-        # Merge calculated leaders dataframe back with filtered demographic roster rows
+        # --- BULLETPROOF ID ALIGNMENT FOR THE MERGE ---
+        metric_df['athlete_id'] = metric_df['athlete_id'].astype(str).str.strip()
+
+        # Merge calculated logs with roster rows
         leaderboard_df = roster.merge(metric_df, left_on='id', right_on='athlete_id', how='inner')
         leaderboard_df = leaderboard_df.sort_values(by=fat_col, ascending=True).reset_index(drop=True)
 
-        # --- UI DISPLAY RENDERING LOOP MATCHING STYLE MIGRATIONS ---
+        # --- UI DISPLAY RENDERING LOOP ---
         if leaderboard_df.empty:
             st.info("ℹ️ No athlete logs found matching the selected leaderboard filters.")
         else:
             for rank, (_, row) in enumerate(leaderboard_df.iterrows(), start=1):
-                # Format ranking medals
                 if rank == 1: medal = "🥇"
                 elif rank == 2: medal = "🥈"
                 elif rank == 3: medal = "🥉"
                 else: medal = "👤"
                 
-                # Metadata line adjustments
                 group_tag = row.get('group', 'Short Sprinters')
                 grade_tag = f"• Grade {row['grade']}" if 'grade' in row and pd.notna(row['grade']) else ""
                 
-                # Render clean leaderboard cards row layout
+                # Double safety numeric check to block NaN output rendering completely
+                import math
+                val = row[fat_col]
+                if pd.isna(val) or math.isnan(val):
+                    display_time = "--"
+                else:
+                    display_time = f"{val:.2f}{suffix}"
+
                 with st.container(border=True):
                     col_rank, col_val, col_badge = st.columns([5, 2, 2])
                     with col_rank:
                         st.markdown(f"#### {medal} {rank}. {row['name']} *({group_tag} {grade_tag})*")
                     with col_val:
-                        st.markdown(f"### **{row[fat_col]:.2f}{suffix}**")
+                        st.markdown(f"### **{display_time}**")
                     with col_badge:
-                        st.write("") # Baseline spacing aligner
+                        st.write("") 
                         if rank == 1:
                             st.warning(f"🏆 {badge_text}")
                         else:
