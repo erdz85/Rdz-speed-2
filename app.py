@@ -289,6 +289,6 @@ elif app_mode == "📄 AD Report Generator":
     
     Verified Authentic via RDZ Speed Development Analytics Database Engine
     """
-    st.markdown(report_html, unsafe_html=True)
+    st.markdown(report_html, unsafe_allow_html=True)
     st.write("---")
     st.download_button("📥 Export Report to Print Ledger System", data=report_html, file_name="rdz_speed_report.html", mime="text/html")
