@@ -136,7 +136,12 @@ app_mode = st.sidebar.radio(
     ]
 )
 
-# FIXED: Defining this globally here ensures Module 3 can copy it on line 328
+# BULLETPROOF RECOVERY GATE: Ensures the 'status' key exists in memory arrays
+if "athletes" in st.session_state:
+    if "status" not in st.session_state.athletes.columns:
+        st.session_state.athletes["status"] = "Active"
+
+# Isolate active athletes globally for selectors and filters
 active_athletes_df = st.session_state.athletes[st.session_state.athletes['status'] == "Active"]
 
 # ==========================================
