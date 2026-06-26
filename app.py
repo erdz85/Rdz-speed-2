@@ -116,6 +116,7 @@ is_hand = timing_method == "Hand-Timed"
 
 app_portal = st.sidebar.radio("Go To Module Portal:", [
     "👥 Roster & Onboarding Hub",
+    "📆 Live Session Dashboard",
     "⏱️ Workout Tracker",
     "🏆 Team Leaderboards", 
     "📈 ... Athlete Progress Trends",
@@ -1117,3 +1118,80 @@ elif app_portal == "⏱️ Workout Tracker":
                         
                         st.toast(f"✅ Logged {fat_time:.2f}s for {athlete_name}!")
                         st.rerun()
+
+# ==========================================
+# MODULE: LIVE SESSION DASHBOARD
+# ==========================================
+elif app_portal == "📆 Live Session Dashboard":
+    st.title("📆 Today's Live Session Dashboard")
+    st.markdown("Real-time view of sprints captured during today's training session.")
+
+    # --- SAFE DATA RETRIEVAL ENGINE ---
+    if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
+        st.info("ℹ️ No workout logs recorded in the system yet. Sprints logged today will appear here.")
+    else:
+        from datetime import datetime
+        today_str = datetime.today().strftime('%Y-%m-%d')
+        
+        # 1. Standardize Workout Logs DataFrame
+        logs_clean = st.session_state.workout_logs.copy()
+        logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
+        
+        # Isolate today's data rows exclusively
+        todays_logs = logs_clean[logs_clean['date'] == today_str].copy()
+        
+        if todays_logs.empty:
+            st.info(f"ℹ️ No repetitions logged yet for today ({today_str}). Use the Tracker module to log splits.")
+        elif 'athletes' not in st.session_state or st.session_state.athletes.empty:
+            st.warning("⚠️ Roster database missing. Please ensure athletes are loaded in the Roster Hub.")
+        else:
+            # 2. Standardize Roster DataFrame
+            roster_clean = st.session_state.athletes.copy()
+            roster_clean.columns = [str(c).lower() for c in roster_clean.columns]
+            
+            # Smart Key Resolution Systems
+            right_key = 'id' if 'id' in roster_clean.columns else ('athlete_id' if 'athlete_id' in roster_clean.columns else roster_clean.columns[0])
+            
+            if 'full_name' in roster_clean.columns:
+                name_key = 'full_name'
+            elif 'name' in roster_clean.columns:
+                name_key = 'name'
+            else:
+                name_candidates = [c for c in roster_clean.columns if 'name' in c]
+                name_key = name_candidates[0] if name_candidates else roster_clean.columns[1]
+            
+            # 3. Clean type formats to match strings exactly (Eliminates numeric vs text merge drops)
+            todays_logs['athlete_id'] = todays_logs['athlete_id'].astype(str).str.strip()
+            roster_clean[right_key] = roster_clean[right_key].astype(str).str.strip()
+            
+            # Force target column formatting to float metrics
+            fat_col = 'fat' if 'fat' in todays_logs.columns else todays_logs.columns[-2]
+            todays_logs[fat_col] = pd.to_numeric(todays_logs[fat_col], errors='coerce')
+            
+            # 4. Complete the DataFrame merge flawlessly
+            display_today = todays_logs.merge(roster_clean, left_on='athlete_id', right_on=right_key, how='left')
+            
+            # Sort with newest entries showing up at the top of the feed
+            if 'log_id' in display_today.columns:
+                display_today = display_today.sort_values(by='log_id', ascending=False)
+
+            # --- UI FEED RENDER LOOP ---
+            st.subheader(f"📊 Active Session Feed — {len(display_today)} Sprints Logged")
+            
+            for idx, row in display_today.iterrows():
+                athlete_display_name = row[name_key] if pd.notna(row[name_key]) else f"Athlete #{row['athlete_id']}"
+                drill_label = "⚡ 20m Fly" if row['type'] == "20m_fly" else "🧱 30m Block Start"
+                group_label = f"({row['group']})" if 'group' in row and pd.notna(row['group']) else ""
+                
+                # Render clean activity card streams
+                with st.container(border=True):
+                    v1, v2, v3 = st.columns([4, 3, 2])
+                    with v1:
+                        st.markdown(f"🏃 **{athlete_display_name}** {group_label}")
+                        st.caption(f"Drill Profile: {drill_label}")
+                    with v2:
+                        st.markdown(f"### **{row[fat_col]:.2f}s FAT**")
+                    with v3:
+                        st.write("") # Vertical offset balance spacer
+                        if 'proj_100' in row and pd.notna(row['proj_100']):
+                            st.markdown(f"🎯 *Proj 100m: {row['proj_100']:.2f}s*")
