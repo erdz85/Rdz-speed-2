@@ -129,148 +129,109 @@ app_portal = st.sidebar.radio("Go To Module Portal:", [
 # MODULE 1: ROSTER & ONBOARDING HUB
 # ==========================================
 if app_portal == "👥 Roster & Onboarding Hub":
-    st.title("🏃 Roster Management & Decentralized Onboarding")
-    
-    tab_signup, tab_actions = st.tabs(["📲 Athlete Sign-Up Portal", "🛠️ Coach Control Center & Actions"])
-    
-    with tab_signup:
-        col_inv1, col_inv2 = st.columns(2)
-        with col_inv1:
-            st.markdown("#### 📱 Step A & B: Shift Labor to the Athletes")
-            st.info("Display this QR or invitation code on the whiteboard. Athletes scan it using their personal mobile devices to build your roster automatically.")
-            st.code("NORTHSIDE-SPEED-2026", language="text")
-            qr = qrcode.QRCode(version=1, box_size=5, border=1)
-            qr.add_data("https://streamlit.app")
-            qr.make(fit=True)
-            buf = io.BytesIO()
-            qr.make_image(fill_color="black", back_color="white").save(buf, format="PNG")
-            st.image(buf.getvalue(), caption="Whiteboard Scan Target", width=140)
-            
-        with col_inv2:
-            st.markdown("#### Simulate Mobile Athlete Registration Form")
-            with st.form("athlete_signup_form", clear_on_submit=True):
-                s_first = st.text_input("First Name")
-                s_last = st.text_input("Last Name")
-                s_gender = st.selectbox("Gender", ["male", "female"])
-                s_grad = st.number_input("Graduation Year", min_value=2026, max_value=2030, value=2027)
-                if st.form_submit_button("Submit Profile Request"):
-                    if s_first and s_last:
-                        calc_grade = max(9, min(12 - (s_grad - 2026), 12))
-                        st.session_state.pending_registrations = pd.concat([
-                            st.session_state.pending_registrations, 
-                            pd.DataFrame([{
-                                "first_name": s_first, 
-                                "last_name": s_last, 
-                                "gender": s_gender, 
-                                "graduation_year": s_grad, 
-                                "grade": calc_grade
-                            }])
-                        ], ignore_index=True)
-                        st.success("Sent request to Coach staging area container.")
-                        st.rerun()
+    st.title("👥 Roster & Onboarding Hub")
+    st.markdown("Manage your team roster, onboard new athletes, and control active training availability status.")
 
-    with tab_actions:
-        st.subheader("🛡️ Step C: The Gatekeeper Approval Staging Area")
-        if not st.session_state.pending_registrations.empty:
-            st.warning(f"🔔 Pending Requests Detected: {len(st.session_state.pending_registrations)} athletes awaiting verification.")
-            st.dataframe(st.session_state.pending_registrations, use_container_width=True)
-            if st.button("✅ APPROVE ALL REQUESTS", use_container_width=True, type="primary"):
-                for _, p in st.session_state.pending_registrations.iterrows():
-                    next_id = f"UUID_A{len(st.session_state.athletes) + 1}"
-                    st.session_state.athletes = pd.concat([
-                        st.session_state.athletes, 
-                        pd.DataFrame([{
-                            "athlete_id": next_id, 
-                            "first_name": p["first_name"], 
-                            "last_name": p["last_name"],
-                            "gender": p["gender"], 
-                            "grade": p["grade"], 
-                            "status": "varsity", 
-                            "group": "Short Sprinters"
-                        }])
-                    ], ignore_index=True)
-                st.session_state.pending_registrations = pd.DataFrame(columns=["first_name", "last_name", "gender", "graduation_year", "grade"])
-                st.success("Roster updated successfully without typing inputs!")
-                st.rerun()
-        else:
-            st.info("No pending requests to verify.")
-            
-        st.markdown("---")
-        st.subheader("⚙️ ROSTER ACTIONS & DATA TOOLS")
-        act_col1, act_col2, act_col3 = st.columns(3)
+    # Initialize the athletes DataFrame if it doesn't exist in session memory
+    if 'athletes' not in st.session_state:
+        st.session_state.athletes = pd.DataFrame(columns=['id', 'name', 'gender', 'grade', 'group', 'tier', 'status'])
+
+    # --- SECTION 1: ATHLETE ONBOARDING FORM ---
+    st.subheader("📝 Onboard New Athlete")
+    with st.form("onboarding_form", clear_on_submit=True):
+        f_col1, f_col2, f_col3 = st.columns(3)
+        with f_col1:
+            new_name = st.text_input("Full Name:")
+            new_gender = st.selectbox("Gender:", ["Male", "Female"])
+        with f_col2:
+            new_grade = st.selectbox("Grade Level:", ["9", "10", "11", "12"])
+            new_group = st.selectbox("Training Group:", ["Short Sprinters", "Hurdlers", "Long Sprinters", "Jumpers"])
+        with f_col3:
+            new_tier = st.selectbox("Roster Tier Allocation:", ["Varsity", "JV / Developing"])
+            new_status = st.selectbox("Initial Status:", ["Active", "Inactive"], help="Inactive athletes can be omitted from relay lineup optimizers while remaining on historic leaderboards.")
+
+        submit_btn = st.form_submit_button("➕ Add Athlete to Roster", use_container_width=True)
         
-        with act_col1:
-            st.markdown("A. CSV/Excel Bulk Import Engine")
-            uploaded_file = st.file_uploader("Drag and drop standard roster spreadsheets", type=["csv"])
-            if uploaded_file is not None:
-                try:
-                    imported_df = pd.read_csv(uploaded_file)
-                    required_cols = ["first_name", "last_name", "gender", "grade", "status", "group"]
-                    if all(col in imported_df.columns for col in required_cols):
-                        imported_df["athlete_id"] = [f"UUID_A{len(st.session_state.athletes) + i + 1}" for i in range(len(imported_df))]
-                        st.session_state.athletes = pd.concat([st.session_state.athletes, imported_df[required_cols + ["athlete_id"]]], ignore_index=True)
-                        st.success(f"Successfully appended {len(imported_df)} roster profiles via bulk data mapper link!")
-                        st.rerun()
-                    else: 
-                        st.error(f"Spreadsheet must strictly match schemas headers: {required_cols}")
-                except Exception as e: 
-                    st.error(f"Data stream fault: {str(e)}")
+        if submit_btn:
+            if not new_name.strip():
+                st.error("⚠️ Athlete name cannot be blank.")
+            else:
+                # Generate a clean unique ID
+                new_id = str(len(st.session_state.athletes) + 1) if st.session_state.athletes.empty else str(int(st.session_state.athletes['id'].astype(int).max()) + 1)
                 
-        with act_col2:
-            st.markdown("B. Custom Sub-Roster Architect")
-            new_group_lbl = st.text_input("Label Title:", placeholder="e.g., Jumpers Pool")
-            if st.button("➕ Create Training Group") and new_group_lbl:
-                if new_group_lbl not in st.session_state.training_groups:
-                    st.session_state.training_groups.append(new_group_lbl)
-                    st.success(f"Added sub-roster tracking channel: {new_group_lbl}")
-                    st.rerun()
-                    
-        with act_col3:
-            st.markdown("C. Automated Annual Roster Rollover")
-            st.warning("Resets senior graduation records, moves them to historical archive, and increments academic standing classes.")
-            if st.button("🔀 ARCHIVE SENIORS & ADVANCE GRADES", use_container_width=True):
-                active_undergrads = st.session_state.athletes[st.session_state.athletes["grade"] < 12].copy()
-                active_undergrads["grade"] = active_undergrads["grade"] + 1
-                st.session_state.athletes = active_undergrads.reset_index(drop=True)
-                st.success("Rollover processing finalized! Database adjusted, clean, and optimized for the next track year sequence.")
+                new_athlete = {
+                    "id": new_id,
+                    "name": new_name.strip(),
+                    "gender": new_gender,
+                    "grade": new_grade,
+                    "group": new_group,
+                    "tier": new_tier,
+                    "status": new_status
+                }
+                
+                st.session_state.athletes = pd.concat([st.session_state.athletes, pd.DataFrame([new_athlete])], ignore_index=True)
+                st.success(f"🎉 Onboarded {new_name} successfully as {new_status}!")
                 st.rerun()
 
-        # Display Control Center Matrix Rows
-        st.markdown("---")
-        st.subheader("📋 Coach's Control Center Dashboard Matrix")
-        group_view = st.selectbox("Group Filter View Routing Toggle:", ["All"] + st.session_state.training_groups)
+    st.write("---")
+
+    # --- SECTION 2: ROSTER MANAGEMENT MATRIX ---
+    st.subheader("📋 Active Roster Management Table")
+    
+    if st.session_state.athletes.empty:
+        st.info("ℹ️ No athletes currently registered on the roster.")
+    else:
+        # Clone roster for management display grid
+        m_roster = st.session_state.athletes.copy()
         
-        display_set = st.session_state.athletes.copy()
-        if group_view != "All":
-            display_set = display_set[display_set["group"] == group_view]
+        # Ensure status column exists for legacy compatibility configurations
+        if 'status' not in m_roster.columns:
+            st.session_state.athletes['status'] = "Active"
+            m_roster['status'] = "Active"
+
+        # Table Header Layout Metrics
+        h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 2, 2])
+        with h1: st.markdown("🗣️ **Athlete Name**")
+        with h2: st.markdown("🏷️ **Group / Tier**")
+        with h3: st.markdown("⚙️ **Availability Toggle**")
+        with h4: st.markdown("📌 **Current Status**")
+        with h5: st.markdown("❌ **Remove**")
+        st.markdown("<hr style='margin: 0px 0px 15px 0px; border-color: #555;' />", unsafe_allow_html=True)
+
+        # Dynamic management loop execution
+        for index, row in m_roster.iterrows():
+            a_id = row['id']
+            a_name = row['name']
+            a_group = row['group']
+            a_tier = row['tier']
+            a_status = row['status']
             
-        for _, row in display_set.iterrows():
-            a_id = row["athlete_id"]
-            best_fly = get_best_historical_fat(a_id, "20m_fly")
-            best_fly_str = f"{best_fly:.2f}s FAT" if best_fly != float('inf') else "N/A"
+            c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 2, 2])
             
-            st.markdown(f"""
-            <div class='metric-card'>
-                <div style='display: flex; justify-content: space-between; align-items: center;'>
-                    <div>
-                        <b>👤 {row['last_name']}, {row['first_name']} (Grade {row['grade']})</b><br/>
-                        <small style='color: #555;'>• Best Season 20m Fly Parameter: {best_fly_str}</small>
-                    </div>
-                    <div>
-                        <span class='badge-tag-varsity'>{row['status'].upper()}</span>
-                        <span class='badge-tag-group'>{row['group'].upper()}</span>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            m_c1, m_c2 = st.columns(2)
-            with m_c1: 
-                new_g = st.selectbox("➡️ Move to Group...", st.session_state.training_groups, index=st.session_state.training_groups.index(row["group"]) if row["group"] in st.session_state.training_groups else 0, key=f"sel_{a_id}")
-            with m_c2: 
-                if st.button("Commit Group Move", key=f"mov_btn_{a_id}"):
-                    st.session_state.athletes.loc[st.session_state.athletes["athlete_id"] == a_id, "group"] = new_g
-                    st.success(f"Shifted group alignment parameters for {row['first_name']}")
+            with c1:
+                st.markdown(f"<div style='padding-top: 5px;'><b>{a_name}</b></div>", unsafe_allow_html=True)
+            with c2:
+                st.caption(f"{a_group} • {a_tier}")
+            with c3:
+                # Active/Inactive Status Switch Toggle
+                is_active = (a_status == "Active")
+                toggle_label = "Set Inactive" if is_active else "Set Active"
+                if st.button(toggle_label, key=f"tog_{a_id}", use_container_width=True):
+                    next_status = "Inactive" if is_active else "Active"
+                    st.session_state.athletes.loc[st.session_state.athletes['id'] == a_id, 'status'] = next_status
+                    st.toast(f"🔄 Updated {a_name} to {next_status}!")
+                    st.rerun()
+            with c4:
+                # Colored Status Visual Badges
+                if a_status == "Active":
+                    st.markdown("<span style='color:#00E676; font-weight:bold;'>🟢 Active</span>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<span style='color:#FF4B4B; font-weight:bold;'>🔴 Inactive</span>", unsafe_allow_html=True)
+            with c5:
+                # Complete Deletion Action Engine
+                if st.button("Delete", key=f"del_{a_id}", use_container_width=True, help=f"Permanently remove {a_name} from roster database."):
+                    st.session_state.athletes = st.session_state.athletes[st.session_state.athletes['id'] != a_id]
+                    st.success(f"🗑️ Removed {a_name} completely from roster.")
                     st.rerun()
 
 # ==========================================
