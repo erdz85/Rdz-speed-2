@@ -643,14 +643,39 @@ elif app_portal == "🤝 4x100m Relay Builder":
     def calculate_go_mark(inc_fly, out_time):
         """
         Calculates relay go-marks based on incoming fly time & outgoing acceleration.
-        Uses 30m Block Start with a dynamic fallback to 20m Fly if block data isn't logged.
+        Safely casts strings and handles missing data gracefully.
         """
+        import math
+        
+        # --- SAFE TYPE CONVERSION SYSTEM ---
+        def to_float(val):
+            if val is None:
+                return None
+            if isinstance(val, (int, float)):
+                return float(val) if not math.isnan(val) else None
+            # If it's a string, strip characters and try to extract the number
+            if isinstance(val, str):
+                try:
+                    # Extracts numbers even if it says "1.98s FAT"
+                    cleaned = "".join([c for c in val if c.isdigit() or c == '.'])
+                    return float(cleaned) if cleaned else None
+                except ValueError:
+                    return None
+            return None
+
+        num_fly = to_float(inc_fly)
+        num_out = to_float(out_time)
+
+        # Safety Fallback: If either runner has invalid data, return a standard varsity default
+        if num_fly is None or num_out is None or num_fly == 0:
+            return 19.5 
+        
         # Formulate a dynamic baseline if dealing with non-block acceleration values
         # If outgoing runner time is a fly, scale it out to estimate a standing start threshold
-        adj_out_acceleration = out_time if out_time > 3.0 else (out_time * 1.95)
+        adj_out_acceleration = num_out if num_out > 3.0 else (num_out * 1.95)
         
         # Calculate dynamic physical gap constraints
-        base_steps = (adj_out_acceleration / inc_fly) * 7.4
+        base_steps = (adj_out_acceleration / num_fly) * 7.4
         return max(12.0, min(24.0, round(base_steps, 1)))
 
     # Fetch ordered values from the generated lineup matrix array
