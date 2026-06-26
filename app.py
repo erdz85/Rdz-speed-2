@@ -226,12 +226,14 @@ elif app_mode == "🏋️ Workout Logger":
     st.title("🏋️ High-Frequency Workout Data Logger")
     st.write("Input newly converted FAT times straight from timing gates into the core ledger database.")
     
+    # -------------------------------------------------------------
+    # PART 1: CHRONOLOGICAL RECORD INPUT FORM
+    # -------------------------------------------------------------
     col1, col2 = st.columns(2)
     with col1:
         log_date = st.date_input("Workout Session Date", datetime.today())
         log_athlete = st.selectbox("Select Competing Athlete:", st.session_state.athletes['name'].unique(), key="log_ath")
         log_id = st.session_state.athletes[st.session_state.athletes['name'] == log_athlete]['id'].values[0]
-        
     with col2:
         log_type = st.selectbox("Test Metric Vector Profile:", ["20m_fly", "30m_block"])
         log_time = st.number_input("Recorded FAT Time Value (seconds):", min_value=0.00, max_value=15.00, value=2.50, step=0.01)
@@ -240,6 +242,53 @@ elif app_mode == "🏋️ Workout Logger":
         new_log_row = {"date": str(log_date), "athlete_id": log_id, "type": log_type, "fat": float(log_time)}
         st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log_row])], ignore_index=True)
         st.success(f"Successfully recorded {log_time}s ({log_type}) for {log_athlete}!")
+        st.rerun()
+
+    st.write("---")
+    
+    # -------------------------------------------------------------
+    # PART 2: THE INTERACTIVE HISTORY MODIFIER & REMOVER
+    # -------------------------------------------------------------
+    st.subheader("🛠️ Review, Modify, or Delete Saved Workouts")
+    st.info("💡 Double-click any cell below to modify a time or date. To remove data, click the box on the left side of the row and press the Delete key on your keyboard.")
+    
+    if not st.session_state.workout_logs.empty:
+        # Create a clean display dataframe that maps athlete names instead of just showing raw IDs
+        display_logs = st.session_state.workout_logs.merge(
+            st.session_state.athletes[['id', 'name']], 
+            left_on='athlete_id', 
+            right_on='id', 
+            how='left'
+        )[['date', 'name', 'type', 'fat']]
+        
+        # Display the spreadsheet editor interface on the page
+        edited_logs = st.data_editor(
+            display_logs,
+            column_config={
+                "date": st.column_config.TextColumn("Session Date"),
+                "name": st.column_config.TextColumn("Athlete Profile Name", disabled=True), # Keep name locked
+                "type": st.column_config.SelectboxColumn("Metric Profile", options=["20m_fly", "30m_block"]),
+                "fat": st.column_config.NumberColumn("FAT Time (seconds)", min_value=0.00, max_value=15.00, format="%.2f")
+            },
+            use_container_width=True,
+            num_rows="dynamic", # Enables row deletion selections
+            key="workout_log_spreadsheet"
+        )
+        
+        # Save edits back to the main database behind the scenes
+        if st.button("💾 Apply & Save Layout Changes"):
+            # Map the clean edited names back to their respective database IDs
+            updated_db = edited_logs.merge(
+                st.session_state.athletes[['id', 'name']], 
+                on='name', 
+                how='left'
+            )[['date', 'id', 'type', 'fat']].rename(columns={'id': 'athlete_id'})
+            
+            st.session_state.workout_logs = updated_db
+            st.toast("Database changes synced successfully!")
+            st.rerun()
+    else:
+        st.info("The history ledger database is currently empty.")
 
 # ==========================================
 # MODULE 4: TEAM LEADERBOARDS
