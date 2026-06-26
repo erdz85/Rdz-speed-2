@@ -528,14 +528,39 @@ elif app_portal == "🤝 4x100m Relay Builder":
         # --- DATA ENGINE: COMPUTE BEST LIFETIME METRICS PER ATHLETE ---
         logs = st.session_state.workout_logs.copy()
         
-        # Extract best 20m_fly and 30m_block times per individual athlete
-        fly_df = logs[logs['type'] == '20m_fly'].groupby('athlete_id')['fat'].min().rename('best_fly')
-        block_df = logs[logs['type'] == '30m_block'].groupby('athlete_id')['fat'].min().rename('best_block')
+        # Standardize logs columns to lowercase to completely prevent KeyErrors
+        logs.columns = [str(c).lower() for c in logs.columns]
+        
+        # Fallback handling in case type or fat columns use varying naming conventions
+        type_col = 'type' if 'type' in logs.columns else ('session_type' if 'session_type' in logs.columns else None)
+        fat_col = 'fat' if 'fat' in logs.columns else ('raw' if 'raw' in logs.columns else logs.columns[-1])
+
+        if type_col and fat_col:
+            # Extract best 20m_fly and 30m_block times per individual athlete
+            fly_df = logs[logs[type_col] == '20m_fly'].groupby('athlete_id')[fat_col].min().rename('best_fly')
+            block_df = logs[logs[type_col] == '30m_block'].groupby('athlete_id')[fat_col].min().rename('best_block')
+        else:
+            # Empty placeholders if columns don't align
+            fly_df = pd.Series(dtype='float64')
+            block_df = pd.Series(dtype='float64')
         
         # Merge best historical marks back with baseline athlete profiles
         roster = st.session_state.athletes.copy()
-        roster = roster.merge(fly_df, left_on='id', right_index=True, how='left')
-        roster = roster.merge(block_df, left_on='id', right_index=True, how='left')
+        # Standardize roster columns to lowercase as well just to be safe
+        roster.columns = [str(c).lower() for c in roster.columns]
+        
+        # Use lowercase matching keys
+        id_col = 'id' if 'id' in roster.columns else 'athlete_id'
+        name_col = 'name' if 'name' in roster.columns else 'athlete_name'
+        gender_col = 'gender' if 'gender' in roster.columns else 'sex'
+        
+        roster = roster.merge(fly_df, left_on=id_col, right_index=True, how='left')
+        roster = roster.merge(block_df, left_on=id_col, right_index=True, how='left')
+        
+        # Ensure name handles are cleanly mapped for the lineup generation
+        if id_col != 'id': roster['id'] = roster[id_col]
+        if name_col != 'name': roster['name'] = roster[name_col]
+        a_gender = roster[gender_col].iloc[0] if gender_col in roster.columns else 'male'
         
         # Drop individuals missing the core 20m fly profiles
         valid_pool = roster.dropna(subset=['best_fly']).copy()
@@ -618,7 +643,7 @@ elif app_portal == "🤝 4x100m Relay Builder":
     exch2_steps = calculate_go_mark(t2, t3)
     exch3_steps = calculate_go_mark(t3, t4)
 
-    # Render results in high-impact metric container cards
+    # Render results in high-impact metric container cards matching Screen Shot 2026-06-26 at 11.52.33 AM.png
     e1, e2, e3 = st.columns(3)
     
     with e1:
