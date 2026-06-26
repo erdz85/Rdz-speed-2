@@ -302,66 +302,141 @@ elif app_portal == "🏋️ Workout Logger":
     # 2. Metric Mode Configuration Selector
     session_metric = st.selectbox("Active Testing Drill Vector Type:", ["20m_fly", "30m_block"])
 
-    # -------------------------------------------------------------
-    # LIVE SPRINT REPETITION ENTRY TRACKER Matrix
-    # -------------------------------------------------------------
+# ==========================================
+# MODULE: LIVE SPRINT REPETITION ENTRY TRACKER
+# ==========================================
+elif app_portal == "⏱️ Workout Tracker":  # Integrates directly into your tracker tab layout
+    st.title("⏱️ Live Sprint Repetition Entry Tracker")
+    st.markdown("Log active sprint intervals while referencing baseline performance records side-by-side.")
+    
+    # 1. Configuration Controls
+    col_sys, col_drill = st.columns(2)
+    with col_sys:
+        timing_system = st.radio("Timing System Method:", ["Electronic / FAT (Freelap)", "Hand-Timed (Stopwatch)"], horizontal=True)
+    with col_drill:
+        session_type = st.selectbox("Active Drill Profile Type:", ["20m_fly", "30m_block"])
+        
     st.write("---")
-    st.subheader("⏱️ Live Roster Quick-Log Interface")
-    st.info("💡 Tap any entry block or input fields to log an athlete's time on the fly.")
     
-    # Quick filter athletes text search bar
-    search_query = st.text_input("🔍 Quick Search Athlete Profile...", "").strip().lower()
-    
-    # Filter out inactive athletes and apply search terms
-    display_roster = active_athletes_df.copy()
-    if search_query:
-        display_roster = display_roster[display_roster['name'].lower().str.contains(search_query)]
-
-    # Render individual rows inside an optimized form grid layout
-    if not display_roster.empty:
-        for _, athlete in display_roster.iterrows():
-            ath_id = athlete['id']
-            ath_name = athlete['name']
-            
-            # Fetch the most recent trial record time from logs
-            ath_history = st.session_state.workout_logs[
-                (st.session_state.workout_logs['athlete_id'] == ath_id) & 
-                (st.session_state.workout_logs['type'] == session_metric)
-            ]
-            last_rep_str = f"{ath_history.iloc[-1]['fat']:.2f}s" if not ath_history.empty else "None"
-            
-            # Row Grid Layout Setup
-            row_col1, row_col2, row_col3 = st.columns([2, 1, 0.5])
-            
-            with row_col1:
-                st.markdown(f"🏃‍♂️ **{ath_name}** <br/> <small style='color:gray;'>Previous Session Rep: {last_rep_str}</small>", unsafe_allow_html=True)
-            
-            with row_col2:
-                # Keypad friendly input configuration container
-                input_val = st.number_input(
-                    "Enter Time", 
-                    min_value=0.00, max_value=15.00, value=0.00, step=0.01, 
-                    key=f"input_{ath_id}", label_visibility="collapsed"
-                )
-                
-            with row_col3:
-                if st.button("OK", key=f"btn_{ath_id}", use_container_width=True):
-                    if input_val > 0:
-                        # Append the trial input directly to the persistent session state data matrices
-                        new_log_row = {
-                            "date": str(datetime.today().date()), 
-                            "athlete_id": ath_id, 
-                            "type": session_metric, 
-                            "fat": float(input_val)
-                        }
-                        st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log_row])], ignore_index=True)
-                        st.toast(f"Logged {input_val}s for {ath_name}!")
-                        st.rerun()
-                    else:
-                        st.error("Enter a valid time.")
-            st.write("<hr style='margin: 0.5em 0px;'/>", unsafe_allow_html=True)
+    # 2. Guard Rails: Verify Core Data Structures Exist
+    if 'athletes' not in st.session_state or st.session_state.athletes.empty:
+        st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
     else:
-        st.warning("No active athletes match your current filter rules.")
+        # Standardize Roster DataFrame
+        roster_view = st.session_state.athletes.copy()
+        roster_view.columns = [str(c).lower() for c in roster_view.columns]
+        
+        id_key = 'id' if 'id' in roster_view.columns else roster_view.columns[0]
+        
+        if 'full_name' in roster_view.columns:
+            name_key = 'full_name'
+        elif 'name' in roster_view.columns:
+            name_key = 'name'
+        else:
+            name_candidates = [c for c in roster_view.columns if 'name' in c]
+            name_key = name_candidates[0] if name_candidates else roster_view.columns[1]
+            
+        gender_key = 'gender' if 'gender' in roster_view.columns else ('sex' if 'sex' in roster_view.columns else None)
+
+        # 3. Pull Dynamic Historical PR References to Build the Reference Matrix
+        if 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty:
+            logs = st.session_state.workout_logs.copy()
+            logs.columns = [str(c).lower() for c in logs.columns]
+            fat_col = 'fat' if 'fat' in logs.columns else ('raw' if 'raw' in logs.columns else logs.columns[-1])
+            logs[fat_col] = pd.to_numeric(logs[fat_col], errors='coerce')
+            type_col = 'type' if 'type' in logs.columns else ('session_type' if 'session_type' in logs.columns else None)
+            
+            fly_prs = logs[logs[type_col] == '20m_fly'].groupby('athlete_id')[fat_col].min().to_dict()
+            block_prs = logs[logs[type_col] == '30m_block'].groupby('athlete_id')[fat_col].min().to_dict()
+        else:
+            fly_prs = {}
+            block_prs = {}
+
+        # 4. Matrix Column Headers Layout
+        # Ratios [3, 2, 2, 3, 2] keep names and fields clean and scannable without wrapping
+        h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 3, 2])
+        with h1: st.markdown("🏃 **Athlete Name**")
+        with h2: st.markdown("⚡ **Best Fly**")
+        with h3: st.markdown("🧱 **Best Block**")
+        with h4: st.markdown("⏱️ **Enter Rep Time (s)**")
+        with h5: st.markdown("💾 **Action**")
+        st.markdown("<hr style='margin: 0px 0px 15px 0px; border-color: #444;' />", unsafe_allow_html=True)
+
+        # 5. Tracker Entry Row Generation Loop
+        for index, athlete in roster_view.iterrows():
+            raw_id = athlete[id_key]
+            string_id = str(raw_id).strip()
+            athlete_name = athlete[name_key]
+            athlete_gender = str(athlete[gender_key]).lower() if gender_key and pd.notna(athlete[gender_key]) else 'male'
+            
+            # Extract Personal Records
+            pr_fly = fly_prs.get(string_id, None)
+            pr_block = block_prs.get(string_id, None)
+            
+            str_fly = f"{pr_fly:.2f}s" if pr_fly and not pd.isna(pr_fly) else "--"
+            str_block = f"{pr_block:.2f}s" if pr_block and not pd.isna(pr_block) else "--"
+            
+            # Row Layout Realignment
+            c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 3, 2])
+            
+            with c1:
+                st.markdown(f"<div style='padding-top: 5px;'><b>{athlete_name}</b></div>", unsafe_allow_html=True)
+            with c2:
+                st.markdown(f"<div style='padding-top: 5px; color: #FF4B4B;'>⚡ {str_fly}</div>", unsafe_allow_html=True)
+            with c3:
+                st.markdown(f"<div style='padding-top: 5px; color: #00E676;'>🧱 {str_block}</div>", unsafe_allow_html=True)
+            with c4:
+                raw_time = st.number_input(
+                    label=f"Input for {string_id}",
+                    min_value=0.00,
+                    max_value=12.00,
+                    step=0.01,
+                    format="%.2f",
+                    key=f"rep_{string_id}",
+                    label_visibility="collapsed"
+                )
+            with c5:
+                if st.button("Log Rep", key=f"btn_{string_id}", use_container_width=True):
+                    if raw_time <= 0:
+                        st.error("⚠️ Enter time > 0")
+                    else:
+                        from datetime import datetime
+                        
+                        # Apply Hand-Timed Correction Factor
+                        fat_time = raw_time
+                        if timing_system == "Hand-Timed (Stopwatch)":
+                            if 'normalize_hand_fly' in globals():
+                                fat_time = normalize_hand_fly(raw_time)
+                            else:
+                                fat_time = raw_time + 0.24 # Standard athletic convention backup
+                        
+                        # Generate Performance Projections
+                        if 'calculate_projected_100m' in globals():
+                            proj = calculate_projected_100m(4.5, fat_time, athlete_gender) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete_gender)
+                        else:
+                            proj = (fat_time * 5.0) + 1.25 if session_type == "20m_fly" else (fat_time * 2.5) + 2.0
+                        
+                        # Compile Log Object
+                        new_log = {
+                            "log_id": len(st.session_state.workout_logs) + 1 if ('workout_logs' in st.session_state and not st.session_state.workout_logs.empty) else 1,
+                            "date": datetime.today().strftime('%Y-%m-%d'),
+                            "athlete_id": string_id,
+                            "type": session_type,
+                            "raw": float(raw_time),
+                            "fat": float(fat_time),
+                            "proj_100": float(proj)
+                        }
+                        
+                        # Commit to Database Memory
+                        log_entry_df = pd.DataFrame([new_log])
+                        if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
+                            st.session_state.workout_logs = log_entry_df
+                        else:
+                            st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, log_entry_df], ignore_index=True)
+                        
+                        # Visual notification toasts are fast and don't muddy the viewport UI layout
+                        st.toast(f"✅ Saved entry of {fat_time:.2f}s for {athlete_name}!")
+                        st.rerun()
 
     # -------------------------------------------------------------
     # REAL-TIME LOG HISTORY OVERVIEW TAB
