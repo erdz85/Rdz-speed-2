@@ -600,9 +600,6 @@ elif app_portal == "📄 AD Report Export":
         section_style = ParagraphStyle(
             'PDFSection', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=12, leading=16, spaceBefore=10, spaceAfter=6, textColor=colors.black
         )
-        body_style = ParagraphStyle(
-            'PDFBody', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=14
-        )
         bullet_style = ParagraphStyle(
             'PDFBullet', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=15, leftIndent=15
         )
@@ -616,7 +613,7 @@ elif app_portal == "📄 AD Report Export":
         story = []
 
         # Header Module Block
-        story.append(Paragraph(f"⚡ {program.upper()} — 2026 SEASON SPEED REPORT", title_style))
+        story.append(Paragraph(f"■ {program.upper()} — 2026 SEASON SPEED REPORT", title_style))
         current_date = datetime.today().strftime('%B %d, %Y')
         story.append(Paragraph(f"Report Generated: {current_date} &nbsp;|&nbsp; Head Coach: {coach}", meta_style))
         story.append(Spacer(1, 10))
@@ -624,14 +621,13 @@ elif app_portal == "📄 AD Report Export":
 
         # Squad Performance KPI Summary
         story.append(Paragraph(f"[ SQUAD OVERVIEW: {squad} ]", section_style))
-        total_athletes = len(st.session_state.athletes) if hasattr(st.session_state, 'athletes') else 24
-        story.append(Paragraph(f"• Total Active Student-Athletes Tracked: <b>{total_athletes}</b>", bullet_style))
+        story.append(Paragraph("• Total Active Student-Athletes Tracked: <b>7</b>", bullet_style))
         story.append(Paragraph("• Avg. 20m Fly Block Performance Improvement: <b>-0.18s</b>", bullet_style))
         story.append(Paragraph("• Team Speed Peak Velocity Aggregate: <b>9.85 m/s (Average)</b>", bullet_style))
         story.append(Spacer(1, 15))
 
         # Roster Performance Table Box
-        story.append(Paragraph("📊 PERFORMANCE ROSTER & 100M PROJECTED RANKINGS", section_style))
+        story.append(Paragraph("■ PERFORMANCE ROSTER & 100M PROJECTED RANKINGS", section_style))
         
         table_data = [
             [Paragraph("<b>Athlete Name</b>", table_hdr_style), Paragraph("<b>Baseline Fly</b>", table_hdr_style), Paragraph("<b>Current PR</b>", table_hdr_style), Paragraph("<b>Net Delta</b>", table_hdr_style), Paragraph("<b>Proj. 100m</b>", table_hdr_style)],
@@ -656,14 +652,14 @@ elif app_portal == "📄 AD Report Export":
         story.append(Spacer(1, 15))
 
         # Relay Construction Board
-        story.append(Paragraph("🏆 PROPOSED 4x100M RELAY LINEUP (DATA-OPTIMIZED)", section_style))
+        story.append(Paragraph("■ PROPOSED 4x100M RELAY LINEUP (DATA-OPTIMIZED)", section_style))
         story.append(Paragraph("• <b>Leg 1 (Starter):</b> Jordan Davis &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[Fastest 30m Block Start: 4.10s]", bullet_style))
         story.append(Paragraph("• <b>Leg 2 (Straight):</b> Marcus Anderson [Fastest 20m Flying Fly: 1.98s]", bullet_style))
         story.append(Paragraph("• <b>Leg 3 (Curve):</b> &nbsp;&nbsp;&nbsp;Trey Williams &nbsp;&nbsp;&nbsp;&nbsp;[Strong Speed Endurance Threshold]", bullet_style))
         story.append(Paragraph("• <b>Leg 4 (Anchor):</b> &nbsp;&nbsp;Xavier Thomas &nbsp;&nbsp;&nbsp;[Closer / Competitor Peak Acceleration]", bullet_style))
         
         story.append(Spacer(1, 8))
-        story.append(Paragraph("👉 <b>RECOMMENDED RELAY GO MARKS:</b>", bullet_style))
+        story.append(Paragraph("■ <b>RECOMMENDED RELAY GO MARKS:</b>", section_style))
         story.append(Paragraph("- Exch 1 (1 to 2): 19.5 Steps &nbsp;|&nbsp; Exch 2 (2 to 3): 18.0 Steps &nbsp;|&nbsp; Exch 3 (3 to 4): 21.0 Steps", bullet_style))
         
         # Verification System Signature Block
@@ -679,22 +675,38 @@ elif app_portal == "📄 AD Report Export":
     # --- STREAMLIT CONTROL ACTION ---
     pdf_data = generate_ad_pdf(coach_name, program_name, squad_division, state_qual_time)
 
-    # Rendering High-Contrast Preview interface on-screen
+    # Rendering Clean On-Screen Live Report UI Preview
     st.markdown("### 📋 Document Preview Panel")
     with st.container(border=True):
-        st.markdown(f"**⚡ {program_name.upper()} — 2026 SEASON SPEED REPORT**")
-        st.caption(f"Report Generated: {datetime.today().strftime('%B %d, %Y')} | Head Coach: {coach_name}")
-        st.markdown(f"**[ SQUAD OVERVIEW: {squad_division} ]**")
-        st.markdown("* • Total Active Student-Athletes Tracked: **24**\n* • Avg. 20m Fly Improvement: **-0.18s**\n* • Team Speed Peak Velocity: **9.85 m/s (Average)**")
+        st.markdown(f"### ■ {program_name.upper()} — 2026 SEASON SPEED REPORT")
+        current_date_str = datetime.today().strftime('%B %d, %Y')
+        st.caption(f"Report Generated: {current_date_str} | Head Coach: {coach_name}")
+        st.write("")
         
-        st.markdown("**📊 PERFORMANCE ROSTER & 100M PROJECTED RANKINGS**")
+        st.markdown(f"**[ SQUAD OVERVIEW: {squad_division} ]**")
+        st.markdown("• Total Active Student-Athletes Tracked: **7** \n• Avg. 20m Fly Block Performance Improvement: **-0.18s** \n• Team Speed Peak Velocity Aggregate: **9.85 m/s (Average)**")
+        st.write("")
+        
+        st.markdown("### ■ PERFORMANCE ROSTER & 100M PROJECTED RANKINGS")
         st.dataframe(pd.DataFrame([
             {"Athlete Name": "Anderson, Marcus", "Baseline Fly": "2.25s FAT", "Current PR": "1.98s FAT", "Net Delta": "-0.27s", "Proj. 100m": "10.95s *"},
             {"Athlete Name": "Williams, Trey", "Baseline Fly": "2.18s FAT", "Current PR": "2.04s FAT", "Net Delta": "-0.14s", "Proj. 100m": "11.25s"},
             {"Athlete Name": "Thomas, Xavier", "Baseline Fly": "2.30s FAT", "Current PR": "2.10s FAT", "Net Delta": "-0.20s", "Proj. 100m": "11.55s"},
             {"Athlete Name": "Davis, Jordan", "Baseline Fly": "2.40s FAT", "Current PR": "2.15s FAT", "Net Delta": "-0.25s", "Proj. 100m": "11.75s"}
         ]), hide_index=True, use_container_width=True)
-        st.caption(f"* Denotes State Qualifying standard projected ({state_qual_time}s)")
+        st.caption(f"* Denotes State Qualifying standard projected ({state_qual_time:.2f}s)")
+        st.write("")
+        
+        st.markdown("### ■ PROPOSED 4x100M RELAY LINEUP (DATA-OPTIMIZED)")
+        st.markdown("• **Leg 1 (Starter):** Jordan Davis [Fastest 30m Block Start: 4.10s]  \n• **Leg 2 (Straight):** Marcus Anderson [Fastest 20m Flying Fly: 1.98s]  \n• **Leg 3 (Curve):** Trey Williams [Strong Speed Endurance Threshold]  \n• **Leg 4 (Anchor):** Xavier Thomas [Closer / Competitor Peak Acceleration]")
+        st.write("")
+        
+        st.markdown("### ■ RECOMMENDED RELAY GO MARKS:")
+        st.markdown("- Exch 1 (1 to 2): **19.5 Steps** | Exch 2 (2 to 3): **18.0 Steps** | Exch 3 (3 to 4): **21.0 Steps**")
+        st.write("---")
+        
+        st.caption("**Verified By:** RDZ Speed Intelligence System Dashboard")
+        st.caption("*This document contains certified high-precision metrics compiled for athletic recruitment evaluation and administrative review.*")
 
     # Floating One-Tap Export Downloader Row
     st.write("")
@@ -705,7 +717,7 @@ elif app_portal == "📄 AD Report Export":
         mime="application/pdf",
         use_container_width=True
     )
-
+    
 # ==========================================
 # MODULE: WORKOUT TRACKER
 # ==========================================
