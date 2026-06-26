@@ -84,19 +84,18 @@ def calculate_relay_go_mark(inc_fly, out_block):
         return 12.0
 
 def calculate_precise_100m(thirty_block, twenty_fly, gender, is_hand_timed=False):
-    # If there is no fly time at all, we cannot compute any projection model
     if twenty_fly is None or pd.isna(twenty_fly) or float(twenty_fly) == 0:
         return None
         
     twenty_fly = float(twenty_fly)
     
-    # Standardize manual hand-timed metrics up to official electronic limits
+    # Adjust for manual stopwatch variations to match FAT parameters
     if is_hand_timed:
         twenty_fly += 0.15
         if thirty_block is not None and not pd.isna(thirty_block):
             thirty_block = float(thirty_block) + 0.24
 
-    # --- FALLBACK RUN LOGIC: Activates if 30m block metric data does not exist ---
+    # --- FALLBACK MECHANISM: Uses 20m Fly-Only model if 30m block start is missing ---
     if thirty_block is None or pd.isna(thirty_block) or float(thirty_block) == 0:
         ten_split = twenty_fly / 2.0
         if str(gender).lower() == "male":
@@ -105,11 +104,12 @@ def calculate_precise_100m(thirty_block, twenty_fly, gender, is_hand_timed=False
             projected_100m = (ten_split * 10) + 1.15  # Formula Femenil
         return round(projected_100m, 2)
 
-    # --- CORE RUN LOGIC: Activates if BOTH inputs are present (Piecewise Model) ---
+    # --- CORE MECHANISM: Runs Piecewise Splicing model when both vectors exist ---
     thirty_block = float(thirty_block)
     ten_split = twenty_fly / 2.0
     base_time = thirty_block + (7.0 * ten_split)
     
+    # Dynamic Speed Endurance Decay Constants based on performance tiers
     if str(gender).lower() == "male":
         decay_constant = 0.12 if base_time < 11.0 else 0.18
     else:
@@ -200,7 +200,7 @@ if app_mode == "👥 Roster & Onboarding":
 elif app_mode == "📈 Athlete Progress":
     st.title("📈 Athlete Performance Trajectory Deep Dive")
     selected_athlete = st.selectbox("Select Athlete Profile:", st.session_state.athletes['name'].unique())
-    athlete_id = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete]['id'].values[0]
+    athlete_id = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete]['id'].values
     athlete_logs = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == athlete_id) & (st.session_state.workout_logs['type'] == "20m_fly")]
     
     if len(athlete_logs) >= 1:
@@ -211,7 +211,7 @@ elif app_mode == "📈 Athlete Progress":
         
         if len(athlete_logs) >= 2:
             last_two = athlete_logs.tail(2)['fat'].values
-            decay_percent = ((last_two[1] - last_two[0]) / last_two[0]) * 100
+            decay_percent = ((last_two - last_two) / last_two) * 100
             if decay_percent > 4.0:
                 st.warning(f"⚠️ CNS Fatigue Advisory Warning Alert: Velocity dropped by {round(decay_percent,1)}% on last rep. Advise immediate recovery down-regulation.")
             else:
@@ -220,20 +220,18 @@ elif app_mode == "📈 Athlete Progress":
         st.info("Provide at least 1 historical entry to populate tracking vectors.")
 
 # ==========================================
-# MODULE 3: WORKOUT LOGGER
+# MODULE 3: WORKOUT LOGGER & MANAGEMENT TABLE
 # ==========================================
 elif app_mode == "🏋️ Workout Logger":
     st.title("🏋️ High-Frequency Workout Data Logger")
     st.write("Input newly converted FAT times straight from timing gates into the core ledger database.")
     
-    # -------------------------------------------------------------
-    # PART 1: CHRONOLOGICAL RECORD INPUT FORM
-    # -------------------------------------------------------------
     col1, col2 = st.columns(2)
     with col1:
         log_date = st.date_input("Workout Session Date", datetime.today())
         log_athlete = st.selectbox("Select Competing Athlete:", st.session_state.athletes['name'].unique(), key="log_ath")
-        log_id = st.session_state.athletes[st.session_state.athletes['name'] == log_athlete]['id'].values[0]
+        log_id = st.session_state.athletes[st.session_state.athletes['name'] == log_athlete]['id'].values
+        
     with col2:
         log_type = st.selectbox("Test Metric Vector Profile:", ["20m_fly", "30m_block"])
         log_time = st.number_input("Recorded FAT Time Value (seconds):", min_value=0.00, max_value=15.00, value=2.50, step=0.01)
@@ -243,49 +241,32 @@ elif app_mode == "🏋️ Workout Logger":
         st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log_row])], ignore_index=True)
         st.success(f"Successfully recorded {log_time}s ({log_type}) for {log_athlete}!")
         st.rerun()
-
+        
     st.write("---")
-    
-    # -------------------------------------------------------------
-    # PART 2: THE INTERACTIVE HISTORY MODIFIER & REMOVER
-    # -------------------------------------------------------------
     st.subheader("🛠️ Review, Modify, or Delete Saved Workouts")
-    st.info("💡 Double-click any cell below to modify a time or date. To remove data, click the box on the left side of the row and press the Delete key on your keyboard.")
+    st.info("💡 Double-click any cell below to modify a time/date. To delete data, select the row using the left checkbox margin and press the Delete key on your keyboard.")
     
     if not st.session_state.workout_logs.empty:
-        # Create a clean display dataframe that maps athlete names instead of just showing raw IDs
         display_logs = st.session_state.workout_logs.merge(
-            st.session_state.athletes[['id', 'name']], 
-            left_on='athlete_id', 
-            right_on='id', 
-            how='left'
+            st.session_state.athletes[['id', 'name']], left_on='athlete_id', right_on='id', how='left'
         )[['date', 'name', 'type', 'fat']]
         
-        # Display the spreadsheet editor interface on the page
         edited_logs = st.data_editor(
             display_logs,
             column_config={
                 "date": st.column_config.TextColumn("Session Date"),
-                "name": st.column_config.TextColumn("Athlete Profile Name", disabled=True), # Keep name locked
+                "name": st.column_config.TextColumn("Athlete Profile Name", disabled=True),
                 "type": st.column_config.SelectboxColumn("Metric Profile", options=["20m_fly", "30m_block"]),
                 "fat": st.column_config.NumberColumn("FAT Time (seconds)", min_value=0.00, max_value=15.00, format="%.2f")
             },
-            use_container_width=True,
-            num_rows="dynamic", # Enables row deletion selections
-            key="workout_log_spreadsheet"
+            use_container_width=True, num_rows="dynamic", key="workout_log_editor_table"
         )
         
-        # Save edits back to the main database behind the scenes
-        if st.button("💾 Apply & Save Layout Changes"):
-            # Map the clean edited names back to their respective database IDs
-            updated_db = edited_logs.merge(
-                st.session_state.athletes[['id', 'name']], 
-                on='name', 
-                how='left'
-            )[['date', 'id', 'type', 'fat']].rename(columns={'id': 'athlete_id'})
-            
+        if st.button("💾 Apply & Save Spreadsheet Changes"):
+            updated_db = edited_logs.merge(st.session_state.athletes[['id', 'name']], on='name', how='left')
+            updated_db = updated_db[['date', 'id', 'type', 'fat']].rename(columns={'id': 'athlete_id'})
             st.session_state.workout_logs = updated_db
-            st.toast("Database changes synced successfully!")
+            st.toast("Database logs updated successfully!")
             st.rerun()
     else:
         st.info("The history ledger database is currently empty.")
@@ -296,7 +277,6 @@ elif app_mode == "🏋️ Workout Logger":
 elif app_mode == "🏆 Team Leaderboards":
     st.title("🏆 Power & Velocity Team Leaderboards")
     st.write("Live program rankings derived from absolute maximum output thresholds.")
-    
     tab1, tab2, tab3 = st.tabs(["⚡ Top 20m Fly Times", "🛫 Top 30m Blocks", "🏃 Projected 100m Dash"])
     
     with tab1:
@@ -325,7 +305,6 @@ elif app_mode == "🏆 Team Leaderboards":
             ath_id = athlete['id']
             best_fly = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == ath_id) & (st.session_state.workout_logs['type'] == "20m_fly")]['fat'].min()
             best_block = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == ath_id) & (st.session_state.workout_logs['type'] == "30m_block")]['fat'].min()
-            
             p_100 = calculate_precise_100m(best_block, best_fly, athlete['gender'], False)
             if p_100:
                 projected_list.append({
@@ -351,14 +330,14 @@ elif app_mode == "🤝 4x100m Relay Builder":
     with col1:
         st.subheader("📥 Incoming Runner (Max Velocity Flying Anchor)")
         inc_athlete = st.selectbox("Select Incoming Runner:", st.session_state.athletes['name'].unique(), key="inc")
-        inc_id = st.session_state.athletes[st.session_state.athletes['name'] == inc_athlete]['id'].values[0]
+        inc_id = st.session_state.athletes[st.session_state.athletes['name'] == inc_athlete]['id'].values
         inc_fly = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == inc_id) & (st.session_state.workout_logs['type'] == "20m_fly")]['fat'].min()
         inc_fly = st.number_input("Incoming 20m Fly (s)", value=float(inc_fly) if not pd.isna(inc_fly) else 2.30)
         
     with col2:
         st.subheader("🛫 Outgoing Runner (Block Acceleration Drive)")
         out_athlete = st.selectbox("Select Outgoing Runner:", st.session_state.athletes['name'].unique(), key="out")
-        out_id = st.session_state.athletes[st.session_state.athletes['name'] == out_athlete]['id'].values[0]
+        out_id = st.session_state.athletes[st.session_state.athletes['name'] == out_athlete]['id'].values
         out_block = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == out_id) & (st.session_state.workout_logs['type'] == "30m_block")]['fat'].min()
         out_block = st.number_input("Outgoing 30m Block (s)", value=float(out_block) if not pd.isna(out_block) else 4.40)
         
