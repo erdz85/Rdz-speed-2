@@ -200,7 +200,7 @@ if app_mode == "👥 Roster & Onboarding":
 elif app_mode == "📈 Athlete Progress":
     st.title("📈 Athlete Performance Trajectory Deep Dive")
     selected_athlete = st.selectbox("Select Athlete Profile:", st.session_state.athletes['name'].unique())
-    athlete_id = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete]['id'].values
+    athlete_id = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete]['id'].values[0]
     athlete_logs = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == athlete_id) & (st.session_state.workout_logs['type'] == "20m_fly")]
     
     if len(athlete_logs) >= 1:
