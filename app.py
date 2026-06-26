@@ -629,3 +629,39 @@ elif app_portal == "🤝 4x100m Relay Builder" or app_portal == "🤝 4x100m Rel
         <p><b>Handoff Execution Instruction:</b> Place the go-mark tape exactly <b>{go_mark_steps} steps</b> backward behind the acceleration zone line. When the incoming runner reaches the tape mark, the outgoing athlete drives out blindly.</p>
     </div>
     """, unsafe_allow_html=True)
+
+# ==========================================
+# MODULE 2: WORKOUT TRACKER
+# ==========================================
+elif app_mode == "⏱️ Workout Tracker":
+    st.title("⏱️ Live Workout Tracker")
+    col1, col2 = st.columns(2)
+    with col1:
+        timing_system = st.radio("Timing Method:", ["Electronic / FAT (Freelap)", "Hand-Timed (Stopwatch)"])
+    with col2:
+        session_type = st.selectbox("Drill Profile:", ["20m_fly", "30m_block"])
+        
+    st.write("---")
+    for index, athlete in st.session_state.athletes.iterrows():
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.write(f"**{athlete['name']}**")
+        with c2:
+            raw_time = st.number_input(f"Split (s)", min_value=0.0, max_value=10.0, step=0.01, key=f"in_{athlete['id']}")
+        with c3:
+            if st.button("Save Log", key=f"btn_{athlete['id']}"):
+                if raw_time > 0:
+                    fat_time = normalize_hand_fly(raw_time) if timing_system == "Hand-Timed (Stopwatch)" else raw_time
+                    proj = calculate_projected_100m(4.5, fat_time, athlete['gender']) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete['gender'])
+                    
+                    new_log = {
+                        "log_id": len(st.session_state.workout_logs) + 1,
+                        "date": datetime.today().strftime('%Y-%m-%d'),
+                        "athlete_id": athlete['id'],
+                        "type": session_type,
+                        "raw": raw_time,
+                        "fat": fat_time,
+                        "proj_100": proj
+                    }
+                    st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log])], ignore_index=True)
+                    st.rerun()
