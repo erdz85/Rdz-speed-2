@@ -216,8 +216,8 @@ elif app_mode == "📈 Athlete Progress":
                 st.warning(f"⚠️ CNS Fatigue Advisory Warning Alert: Velocity dropped by {round(decay_percent,1)}% on last rep. Advise immediate recovery down-regulation.")
             else:
                 st.success("🟢 CNS Efficiency Stable. Athlete is primed for max velocity output.")
-            else:
-                st.info("Provide at least 1 historical entry to populate tracking vectors.")
+    else:
+        st.info("Provide at least 1 historical entry to populate tracking vectors.")
 
 # ==========================================
 # MODULE 3: WORKOUT LOGGER
