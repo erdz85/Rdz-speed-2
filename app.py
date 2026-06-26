@@ -7,7 +7,7 @@ import io
 from datetime import datetime
 
 # ==========================================
-# 1. APP CONFIGURATION & STYLE SETUP
+# 1. APP CONFIGURATION & STYLE SETUP (FIXED TEXT COLOR)
 # ==========================================
 st.set_page_config(
     page_title="RDZ Speed Development",
@@ -16,24 +16,34 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Inject high-visibility coaching styles
+# High-contrast track-coaching aesthetics with forced high-visibility text colors
 st.markdown("""
 <style>
-    .metric-card { background-color: #f8f9fa; border-radius: 10px; padding: 15px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    .badge-top-speed { background-color: #f1c40f; color: black; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px;}
-    .badge-hot { background-color: #e67e22; color: white; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px;}
-    .badge-pr { background-color: #2ecc71; color: white; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px;}
-    .badge-fatigue { background-color: #d9534f; color: white; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px;}
-    .badge-tag-varsity { background-color: #4a90e2; color: white; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px; }
-    .badge-tag-group { background-color: #9013fe; color: white; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px; }
-    .insight-list { font-size: 1.1rem; line-height: 1.8; list-style-type: none; padding-left: 0; }
+    /* Global metric card text styling overrides to prevent white-on-white text bugs */
+    .metric-card { 
+        background-color: #f8f9fa !important; 
+        color: #111111 !important; 
+        border-radius: 10px; 
+        padding: 15px; 
+        border-left: 5px solid #ff4b4b; 
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .metric-card b, .metric-card span, .metric-card div, .metric-card p {
+        color: #111111 !important;
+    }
+    
+    /* System Action Badges */
+    .badge-top-speed { background-color: #f1c40f !important; color: black !important; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px;}
+    .badge-hot { background-color: #e67e22 !important; color: white !important; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px;}
+    .badge-pr { background-color: #2ecc71 !important; color: white !important; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px;}
+    .badge-tag-varsity { background-color: #4a90e2 !important; color: white !important; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px; }
+    .badge-tag-group { background-color: #9013fe !important; color: white !important; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px; }
+    .badge-fatigue { background-color: #d9534f !important; color: white !important; font-weight: bold; padding: 3px 8px; border-radius: 5px; display: inline-block; margin-right: 5px;}
+    
+    /* Clean Print ledger layout constraints */
     .print-document { background-color: white !important; color: black !important; font-family: 'Courier New', Courier, monospace !important; padding: 25px; border: 2px solid black; }
-    .print-header { text-align: center; border-bottom: 3px double black; padding-bottom: 10px; margin-bottom: 20px; }
-    .print-section { border: 1px solid black; padding: 12px; margin-bottom: 15px; }
-    .print-section-title { font-weight: bold; text-transform: uppercase; background-color: #eaeaea; padding: 4px; border-bottom: 1px solid black; margin-top: -12px; margin-left: -12px; margin-right: -12px; font-size: 1.05rem; }
-    .print-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    .print-table th { border-bottom: 2px solid black; text-align: left; padding: 6px; font-weight: bold; }
-    .print-table td { padding: 6px; border-bottom: 1px dashed #ccc; }
+    .insight-list { font-size: 1.1rem; line-height: 1.8; list-style-type: none; padding-left: 0; color: #111111 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -246,7 +256,8 @@ elif app_portal == "⏱️ Live Session Dashboard":
     active_group_filter = st.selectbox("Select Active Group At Sprints Line:", ["All Active Roster"] + st.session_state.training_groups)
     
     col_h1, col_h2 = st.columns(2)
-    with col_h1: st.subheader("🗓️ CURRENT WORKOUT: Max Velocity Flys")
+    with col_h1: 
+        st.subheader("🗓️ CURRENT WORKOUT: Max Velocity Flys")
     with col_h2:
         if st.button("🔴 END ACTIVE SESSION", use_container_width=True):
             if st.session_state.active_session_logs:
@@ -266,7 +277,8 @@ elif app_portal == "⏱️ Live Session Dashboard":
     
     for _, athlete in roster_working_subset.iterrows():
         full_name = f"{athlete['first_name']} {athlete['last_name']}"
-        if search_query and search_query not in full_name.lower(): continue
+        if search_query and search_query not in full_name.lower(): 
+            continue
         
         a_id = athlete["athlete_id"]
         past_logs = st.session_state.workout_logs[st.session_state.workout_logs["athlete_id"] == a_id]
@@ -274,7 +286,8 @@ elif app_portal == "⏱️ Live Session Dashboard":
         
         r_col1, r_col2 = st.columns(2)
         with r_col1: 
-            st.markdown(f"👤 {athlete['last_name']}, {athlete['first_name']} [Last Run: {last_time_str}]")
+            # Forced color assignment style formatting applied to fix background invisibility bugs
+            st.markdown(f"<span style='color: #111111; font-weight: bold;'>👤 {athlete['last_name']}, {athlete['first_name']}</span> <span style='color: #555555;'>[Last Run: {last_time_str}]</span>", unsafe_allow_html=True)
         with r_col2:
             if st.button(f"Enter Time", key=f"btn_{a_id}", use_container_width=True):
                 st.session_state.active_athlete_input_id = a_id
@@ -284,34 +297,41 @@ elif app_portal == "⏱️ Live Session Dashboard":
     # Smart Keypad Interceptor Panel
     if st.session_state.active_athlete_input_id:
         target_id = st.session_state.active_athlete_input_id
-        ath_info = st.session_state.athletes[st.session_state.athletes["athlete_id"] == target_id].iloc
+        
+        # FIXED: Extraction slice fixed by adding index extraction bounds safely [0]
+        ath_info = st.session_state.athletes[st.session_state.athletes["athlete_id"] == target_id].iloc[0]
         
         st.markdown(f"### 🎛️ Smart Keypad: {ath_info['first_name']} {ath_info['last_name']}")
         k_col1, k_col2 = st.columns([2, 1.2])
         with k_col1:
             row1 = st.columns(3); row2 = st.columns(3); row3 = st.columns(3); row4 = st.columns(3)
-            if row1.button("1", key="k1", use_container_width=True): st.session_state.keypad_buffer += "1"; st.rerun()
-            if row1.button("2", key="k2", use_container_width=True): st.session_state.keypad_buffer += "2"; st.rerun()
-            if row1.button("3", key="k3", use_container_width=True): st.session_state.keypad_buffer += "3"; st.rerun()
-            if row2.button("4", key="k4", use_container_width=True): st.session_state.keypad_buffer += "4"; st.rerun()
-            if row2.button("5", key="k5", use_container_width=True): st.session_state.keypad_buffer += "5"; st.rerun()
-            if row2.button("6", key="k6", use_container_width=True): st.session_state.keypad_buffer += "6"; st.rerun()
-            if row3.button("7", key="k7", use_container_width=True): st.session_state.keypad_buffer += "7"; st.rerun()
-            if row3.button("8", key="k8", use_container_width=True): st.session_state.keypad_buffer += "8"; st.rerun()
-            if row3.button("9", key="k9", use_container_width=True): st.session_state.keypad_buffer += "9"; st.rerun()
-            if row4.button(".", key="k_dot", use_container_width=True): st.session_state.keypad_buffer += "."; st.rerun()
-            if row4.button("0", key="k0", use_container_width=True): st.session_state.keypad_buffer += "0"; st.rerun()
-            if row4.button("⌫ Clear", key="k_clear", use_container_width=True): st.session_state.keypad_buffer = ""; st.rerun()
+            
+            # FIXED: Matrix coordinate tracking elements addressed individually via positional array mapping index
+            if row1[0].button("1", key="k1", use_container_width=True): st.session_state.keypad_buffer += "1"; st.rerun()
+            if row1[1].button("2", key="k2", use_container_width=True): st.session_state.keypad_buffer += "2"; st.rerun()
+            if row1[2].button("3", key="k3", use_container_width=True): st.session_state.keypad_buffer += "3"; st.rerun()
+            
+            if row2[0].button("4", key="k4", use_container_width=True): st.session_state.keypad_buffer += "4"; st.rerun()
+            if row2[1].button("5", key="k5", use_container_width=True): st.session_state.keypad_buffer += "5"; st.rerun()
+            if row2[2].button("6", key="k6", use_container_width=True): st.session_state.keypad_buffer += "6"; st.rerun()
+            
+            if row3[0].button("7", key="k7", use_container_width=True): st.session_state.keypad_buffer += "7"; st.rerun()
+            if row3[1].button("8", key="k8", use_container_width=True): st.session_state.keypad_buffer += "8"; st.rerun()
+            if row3[2].button("9", key="k9", use_container_width=True): st.session_state.keypad_buffer += "9"; st.rerun()
+            
+            if row4[0].button(".", key="k_dot", use_container_width=True): st.session_state.keypad_buffer += "."; st.rerun()
+            if row4[1].button("0", key="k0", use_container_width=True): st.session_state.keypad_buffer += "0"; st.rerun()
+            if row4[2].button("⌫ Clear", key="k_clear", use_container_width=True): st.session_state.keypad_buffer = ""; st.rerun()
 
         with k_col2:
             raw_buffer = st.session_state.keypad_buffer
             if len(raw_buffer) == 3 and "." not in raw_buffer: 
                 raw_buffer = f"{raw_buffer}.{raw_buffer[1:]}"
-            st.markdown(f"#### Typed Input: {raw_buffer}")
+            st.markdown(f"#### Typed Input: `{raw_buffer}`")
             try:
                 val_input = float(raw_buffer)
                 norm_fat = round(val_input + 0.15, 2) if is_hand else round(val_input, 2)
-                st.write(f"📊 FAT Converted Standard: {norm_fat:.2f}s FAT")
+                st.write(f"📊 FAT Converted Standard: **{norm_fat:.2f}s FAT**")
                 if st.button("🎯 COMMIT & OK", use_container_width=True, type="primary"):
                     st.session_state.active_session_logs.append({
                         "log_id": f"LOG_L{len(st.session_state.workout_logs)+1}",
@@ -376,7 +396,8 @@ elif app_portal == "🏆 Team Leaderboards":
                 """, unsafe_allow_html=True)
                 
             st.markdown("### 👑 RECENTLY CROWNED ANNOUNCEMENTS")
-            st.info(f"🏆 Social Feed: **{leaderboard_df.loc[0, 'first_name']} {leaderboard_df.loc[0, 'last_name']}** is holding down the absolute apex top velocity standard!")
+            # FIXED: Replaced .loc with .iloc to guarantee safe row extraction on filtered datasets
+            st.info(f"🏆 Social Feed: **{leaderboard_df.iloc[0]['first_name']} {leaderboard_df.iloc[0]['last_name']}** is holding down the absolute apex top velocity standard!")
         else:
             st.warning("No athletes match selected data filter parameters.")
             
@@ -388,7 +409,8 @@ elif app_portal == "📈 ... Athlete Progress Trends":
     selected_display = st.selectbox("🔍 Select Profile for Deep Dive Analytical Review:", list(athlete_options.keys()))
     target_athlete_id = athlete_options[selected_display]
     
-    ath_row = st.session_state.athletes[st.session_state.athletes["athlete_id"] == target_athlete_id].iloc
+    # FIXED: Added [0] to extract the specific row dictionary securely
+    ath_row = st.session_state.athletes[st.session_state.athletes["athlete_id"] == target_athlete_id].iloc[0]
     st.markdown(f"### 👤 ATHLETE PROFILE: {ath_row['first_name']} {ath_row['last_name']} ({ath_row['status'].title()})")
     
     metric_trend = st.radio("Metric Filter Type:", ["● 20m Fly Trend", "◯ 30m Block Trend"], horizontal=True)
