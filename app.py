@@ -171,18 +171,15 @@ if app_portal == "👥 Roster & Onboarding Hub":
             ),
             "name": st.column_config.TextColumn(
                 "🏃 Full Name", 
-                placeholder="Enter athlete's name...", 
-                required=True
+                placeholder="Enter athlete's name..." # required=True removed!
             ),
             "gender": st.column_config.SelectboxColumn(
                 "⚧️ Gender",
-                options=["Male", "Female"],
-                required=True
+                options=["Male", "Female"]            # required=True removed!
             ),
             "grade": st.column_config.SelectboxColumn(
                 "🎓 Grade",
-                options=["9", "10", "11", "12"],
-                required=True
+                options=["9", "10", "11", "12"]
             ),
             "group": st.column_config.SelectboxColumn(
                 "🏷️ Training Group",
@@ -195,7 +192,6 @@ if app_portal == "👥 Roster & Onboarding Hub":
             "status": st.column_config.SelectboxColumn(
                 "📌 Availability Status",
                 options=["Active", "Inactive"],
-                required=True,
                 help="Inactive athletes drop from the Relay Optimizer layout instantly but remain visible on historic leaderboard tracking pages."
             )
         }
