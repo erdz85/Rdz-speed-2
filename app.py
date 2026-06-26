@@ -330,14 +330,14 @@ elif app_mode == "🤝 4x100m Relay Builder":
     with col1:
         st.subheader("📥 Incoming Runner (Max Velocity Flying Anchor)")
         inc_athlete = st.selectbox("Select Incoming Runner:", st.session_state.athletes['name'].unique(), key="inc")
-        inc_id = st.session_state.athletes[st.session_state.athletes['name'] == inc_athlete]['id'].values
+        inc_id = st.session_state.athletes[st.session_state.athletes['name'] == inc_athlete]['id'].values[0]
         inc_fly = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == inc_id) & (st.session_state.workout_logs['type'] == "20m_fly")]['fat'].min()
         inc_fly = st.number_input("Incoming 20m Fly (s)", value=float(inc_fly) if not pd.isna(inc_fly) else 2.30)
         
     with col2:
         st.subheader("🛫 Outgoing Runner (Block Acceleration Drive)")
         out_athlete = st.selectbox("Select Outgoing Runner:", st.session_state.athletes['name'].unique(), key="out")
-        out_id = st.session_state.athletes[st.session_state.athletes['name'] == out_athlete]['id'].values
+        out_id = st.session_state.athletes[st.session_state.athletes['name'] == out_athlete]['id'].values[0]
         out_block = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == out_id) & (st.session_state.workout_logs['type'] == "30m_block")]['fat'].min()
         out_block = st.number_input("Outgoing 30m Block (s)", value=float(out_block) if not pd.isna(out_block) else 4.40)
         
