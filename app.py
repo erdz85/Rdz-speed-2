@@ -237,22 +237,23 @@ table_group = QGroupBox("Performance Tracking Matrix")
 tg_layout = QVBoxLayout(table_group)
 self.table = QTableWidget(0, 5)
 self.table.setHorizontalHeaderLabels(["Athlete Profile Name", "Raw 20m Fly (s)", "Raw 30m Block (s)", "FAT Normal Fly", "FAT Normal Block"])
-self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-self.table.cellChanged.connect(self.handle_cell_input)
-tg_layout.addWidget(self.table)
-main_layout.addWidget(table_group, 3)
-layout.addLayout(main_layout)
-self.refresh_tracker_view()
-def sync_session_timing_mode(self):
-is_hand = self.timing_toggle.isChecked()
-for a in self.state.athletes:
-a.is_hand_timed = is_hand
-self.refresh_tracker_view()
-self.refresh_callback()
-def handle_cell_input(self, row, col):
-if col not in: return # Filter processing overrides to raw capture inputs
-athlete = self.state.athletes[row]
-item = self.table.item(row, col)
+        # --- STREAMLIT COMPATIBLE TIMING LOGIC ---
+        # Replaces self.timing_toggle.isChecked() with a native web toggle
+        is_hand = st.toggle("Enable Hand-Timed Mode (Applies conversion adjustments)", key="timing_gate_toggle")
+        
+        # Sync the timing mode across your athlete state matrix
+        if 'athletes' in st.session_state:
+            # Add a timing mode tracker column to the active roster dataframe
+            st.session_state.athletes['is_hand_timed'] = is_hand
+            
+        # Display the interactive grid view using native Streamlit dataframes
+        st.subheader("📊 Session Roster Activity Monitor")
+        st.dataframe(
+            st.session_state.athletes,
+            use_container_width=True,
+            hide_index=True
+        )
+
 if not item or not item.text().strip(): return
 try:
 val = float(item.text())
