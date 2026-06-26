@@ -579,8 +579,8 @@ elif app_portal == "📄 AD Report Export":
             </tr>
             """
             
-    st.markdown(f"""
-    <div class="print-document" style="background-color: white; color: black; font-family: monospace; padding: 20px; border: 2px solid black;">
+st.markdown(report_html, unsafe_allow_html=True)
+<div class="print-document" style="background-color: white; color: black; font-family: monospace; padding: 20px; border: 2px solid black;">
         <div style="text-align: center; border-bottom: 3px double black; padding-bottom: 10px; margin-bottom: 20px;">
             <h2 style="margin: 0; font-weight: bold; color: black;">⚡ NORTHSIDE TRACK & FIELD — 2026 SEASON SPEED REPORT</h2>
             <p style="margin: 5px 0 0 0; color: black;">Report Generated: {datetime.today().strftime('%B %d, %Y')} | Head Coach: John Doe</p>
