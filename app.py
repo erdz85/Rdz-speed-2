@@ -148,7 +148,7 @@ if app_portal == "👥 Roster & Onboarding Hub":
             new_group = st.selectbox("Training Group:", ["Short Sprinters", "Hurdlers", "Long Sprinters", "Jumpers"])
         with f_col3:
             new_tier = st.selectbox("Roster Tier Allocation:", ["Varsity", "JV / Developing"])
-            new_status = st.selectbox("Initial Status:", ["Active", "Inactive"], help="Inactive athletes can be omitted from relay lineup optimizers while remaining on historic leaderboards.")
+            new_status = st.selectbox("Initial Status:", ["Active", "Inactive"], help="Set initial operational availability.")
 
         submit_btn = st.form_submit_button("➕ Add Athlete to Roster", use_container_width=True)
         
@@ -156,8 +156,18 @@ if app_portal == "👥 Roster & Onboarding Hub":
             if not new_name.strip():
                 st.error("⚠️ Athlete name cannot be blank.")
             else:
-                # Generate a clean unique ID
-                new_id = str(len(st.session_state.athletes) + 1) if st.session_state.athletes.empty else str(int(st.session_state.athletes['id'].astype(int).max()) + 1)
+                # Dynamically evaluate the current ID tracking column safely
+                existing_roster = st.session_state.athletes.copy()
+                existing_roster.columns = [str(c).lower() for c in existing_roster.columns]
+                
+                if existing_roster.empty:
+                    new_id = "1"
+                else:
+                    id_col_name = 'id' if 'id' in existing_roster.columns else existing_roster.columns[0]
+                    try:
+                        new_id = str(int(pd.to_numeric(existing_roster[id_col_name], errors='coerce').max()) + 1)
+                    except:
+                        new_id = str(len(existing_roster) + 1)
                 
                 new_athlete = {
                     "id": new_id,
@@ -181,17 +191,25 @@ if app_portal == "👥 Roster & Onboarding Hub":
     if st.session_state.athletes.empty:
         st.info("ℹ️ No athletes currently registered on the roster.")
     else:
-        # Clone roster for management display grid
+        # Clone roster and force all display columns to lowercase to prevent KeyErrors
         m_roster = st.session_state.athletes.copy()
+        m_roster.columns = [str(c).lower() for c in m_roster.columns]
         
-        # Ensure status column exists for legacy compatibility configurations
+        # Smart Key Resolution backups for original frame updating
+        orig_id_col = st.session_state.athletes.columns[0]
+        for c in st.session_state.athletes.columns:
+            if str(c).lower() == 'id':
+                orig_id_col = c
+                break
+
+        # Ensure status column exists safely
         if 'status' not in m_roster.columns:
-            st.session_state.athletes['status'] = "Active"
+            st.session_state.athletes['Status'] = "Active"
             m_roster['status'] = "Active"
 
         # Table Header Layout Metrics
         h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 2, 2])
-        with h1: st.markdown("🗣️ **Athlete Name**")
+        with h1: st.markdown("🏃 **Athlete Name**")
         with h2: st.markdown("🏷️ **Group / Tier**")
         with h3: st.markdown("⚙️ **Availability Toggle**")
         with h4: st.markdown("📌 **Current Status**")
@@ -200,11 +218,11 @@ if app_portal == "👥 Roster & Onboarding Hub":
 
         # Dynamic management loop execution
         for index, row in m_roster.iterrows():
-            a_id = row['id']
-            a_name = row['name']
-            a_group = row['group']
-            a_tier = row['tier']
-            a_status = row['status']
+            a_id = str(row['id']).strip()
+            a_name = row.get('name', row.get('full_name', 'Unknown'))
+            a_group = row.get('group', 'Sprinters')
+            a_tier = row.get('tier', 'Varsity')
+            a_status = row.get('status', 'Active')
             
             c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 2, 2])
             
@@ -214,23 +232,31 @@ if app_portal == "👥 Roster & Onboarding Hub":
                 st.caption(f"{a_group} • {a_tier}")
             with c3:
                 # Active/Inactive Status Switch Toggle
-                is_active = (a_status == "Active")
+                is_active = (str(a_status).lower() == "active")
                 toggle_label = "Set Inactive" if is_active else "Set Active"
                 if st.button(toggle_label, key=f"tog_{a_id}", use_container_width=True):
                     next_status = "Inactive" if is_active else "Active"
-                    st.session_state.athletes.loc[st.session_state.athletes['id'] == a_id, 'status'] = next_status
+                    
+                    # Update target using standard vector lookups matching the base frame keys
+                    idx_match = st.session_state.athletes[st.session_state.athletes[orig_id_col].astype(str).str.strip() == a_id].index
+                    if 'status' in st.session_state.athletes.columns:
+                        st.session_state.athletes.loc[idx_match, 'status'] = next_status
+                    else:
+                        st.session_state.athletes.loc[idx_match, 'Status'] = next_status
+                        
                     st.toast(f"🔄 Updated {a_name} to {next_status}!")
                     st.rerun()
             with c4:
                 # Colored Status Visual Badges
-                if a_status == "Active":
+                if str(a_status).lower() == "active":
                     st.markdown("<span style='color:#00E676; font-weight:bold;'>🟢 Active</span>", unsafe_allow_html=True)
                 else:
                     st.markdown("<span style='color:#FF4B4B; font-weight:bold;'>🔴 Inactive</span>", unsafe_allow_html=True)
             with c5:
                 # Complete Deletion Action Engine
-                if st.button("Delete", key=f"del_{a_id}", use_container_width=True, help=f"Permanently remove {a_name} from roster database."):
-                    st.session_state.athletes = st.session_state.athletes[st.session_state.athletes['id'] != a_id]
+                if st.button("Delete", key=f"del_{a_id}", use_container_width=True):
+                    # Filter matching values safely from base state storage frames
+                    st.session_state.athletes = st.session_state.athletes[st.session_state.athletes[orig_id_col].astype(str).str.strip() != a_id]
                     st.success(f"🗑️ Removed {a_name} completely from roster.")
                     st.rerun()
 
