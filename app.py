@@ -199,32 +199,91 @@ if app_mode == "👥 Roster & Onboarding":
 # ==========================================
 elif app_mode == "📈 Athlete Progress":
     st.title("📈 Athlete Performance Trajectory Deep Dive")
-    selected_athlete = st.selectbox("Select Athlete Profile:", st.session_state.athletes['name'].unique())
-    athlete_id = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete]['id'].values[0]
-    athlete_logs = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == athlete_id) & (st.session_state.workout_logs['type'] == "20m_fly")]
     
-    if len(athlete_logs) >= 1:
-        athlete_logs = athlete_logs.sort_values(by="date")
-        fig = px.line(athlete_logs, x="date", y="fat", title="20m Fly FAT Progression Trend", markers=True)
-        fig.update_yaxes(autorange="reversed")
-        st.plotly_chart(fig, use_container_width=True)
+    # 1. Profile Selector and Core Roster Matching
+    selected_athlete = st.selectbox("Select Athlete Profile:", st.session_state.athletes['name'].unique())
+    athlete_row = st.session_state.athletes[st.session_state.athletes['name'] == selected_athlete].iloc[0]
+    athlete_id = athlete_row['id']
+    athlete_gender = athlete_row['gender']
+    
+    # Isolate specific historical metric vectors
+    fly_logs = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == athlete_id) & (st.session_state.workout_logs['type'] == "20m_fly")]
+    block_logs = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == athlete_id) & (st.session_state.workout_logs['type'] == "30m_block")]
+    
+    # 2. OVERVIEW KPI SCORECARD HEADER GRID
+    st.subheader("📋 Athlete Performance Summary Card")
+    kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+    
+    with kpi_col1:
+        best_fly = fly_logs['fat'].min() if not fly_logs.empty else None
+        fly_display = f"{best_fly:.2f}s" if best_fly else "No Data"
+        st.metric("⚡ Personal Best 20m Fly", fly_display)
         
-        # Check for Central Nervous System (CNS) Fatigue
-        if len(athlete_logs) >= 2:
-            last_two = athlete_logs.tail(2)['fat'].values
+    with kpi_col2:
+        best_block = block_data_val = block_logs['fat'].min() if not block_logs.empty else None
+        block_display = f"{best_block:.2f}s" if best_block else "No Data"
+        st.metric("🛫 Personal Best 30m Block", block_display)
+        
+    with kpi_col3:
+        # Runs your dynamic Piecewise Fallback engine directly on their profile records
+        projected_100m = calculate_precise_100m(best_block, best_fly, athlete_gender, False)
+        proj_display = f"{projected_100m:.2f}s" if projected_100m else "Missing Baseline Fly"
+        st.metric("🎯 Projected 100m Dash", proj_display)
+        
+    with kpi_col4:
+        total_reps = len(fly_logs) + len(block_logs)
+        st.metric("🔢 Total Tracked Repetitions", total_reps)
+        
+    st.write("---")
+    
+    # 3. INTERACTIVE HISTORICAL ANALYSIS TABS
+    tab_fly, tab_block = st.tabs(["⚡ Max Velocity Vectors (20m Fly)", "🛫 Acceleration Drive Vectors (30m Block)"])
+    
+    with tab_fly:
+        st.subheader("20m Fly Velocity Analytics")
+        if len(fly_logs) >= 1:
+            fly_logs = fly_logs.sort_values(by="date")
+            fig_fly = px.line(fly_logs, x="date", y="fat", title="20m Fly FAT Progression Trend", markers=True)
+            fig_fly.update_yaxes(autorange="reversed")
+            st.plotly_chart(fig_fly, use_container_width=True)
             
-            # FIXED: Explicitly pull raw single decimals out of the array boxes
-            val_old = float(last_two[0]) # Second to last run
-            val_new = float(last_two[1]) # Most recent run
+            # Central Nervous System Fatigue Diagnostic Engine
+            if len(fly_logs) >= 2:
+                last_two = fly_logs.tail(2)['fat'].values
+                val_old = float(last_two[0])
+                val_new = float(last_two[1])
+                decay_percent = ((val_new - val_old) / val_old) * 100
+                
+                if decay_percent > 4.0:
+                    st.warning(f"⚠️ CNS Fatigue Advisory Warning Alert: Velocity dropped by {round(decay_percent,1)}% on last rep. Advise immediate recovery down-regulation.")
+                else:
+                    st.success("🟢 CNS Efficiency Stable. Athlete is primed for max velocity output.")
+        else:
+            st.info("Provide at least 1 historical 20m Fly entry to populate tracking vectors.")
             
-            decay_percent = ((val_new - val_old) / val_old) * 100
+    with tab_block:
+        st.subheader("30m Block Acceleration Analytics")
+        if len(block_logs) >= 1:
+            block_logs = block_logs.sort_values(by="date")
+            fig_block = px.line(block_logs, x="date", y="fat", title="30m Block Start Progression Trend", markers=True)
+            fig_block.update_yaxes(autorange="reversed")
+            st.plotly_chart(fig_block, use_container_width=True)
             
-            if decay_percent > 4.0:
-                st.warning(f"⚠️ CNS Fatigue Advisory Warning Alert: Velocity dropped by {round(decay_percent,1)}% on last rep. Advise immediate recovery down-regulation.")
-            else:
-                st.success("🟢 CNS Efficiency Stable. Athlete is primed for max velocity output.")
-    else:
-        st.info("Provide at least 1 historical entry to populate tracking vectors.")
+            # Micro-insight reporting to evaluate start consistency
+            if len(block_logs) >= 2:
+                last_two_b = block_logs.tail(2)['fat'].values
+                b_old = float(last_two_b[0])
+                b_new = float(last_two_b[1])
+                block_diff = b_new - b_old
+                
+                if block_diff > 0.10:
+                    st.info(f"📋 Notice: Block start execution slowed down by {round(block_diff, 2)}s compared to last session. Check stance setup variables.")
+                elif block_diff < -0.10:
+                    st.success(f"🔥 Progress: Block start acceleration improved by {round(abs(block_diff), 2)}s! Power output trending upward.")
+                else:
+                    st.info("🔵 Acceleration profile consistency stable compared to your previous trial.")
+        else:
+            st.info("Provide at least 1 historical 30m Block entry to populate acceleration tracking vectors.")
 
 # ==========================================
 # MODULE 3: WORKOUT LOGGER & MANAGEMENT TABLE
