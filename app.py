@@ -247,6 +247,7 @@ elif app_mode == "🏋️ Workout Logger":
 elif app_mode == "🏆 Team Leaderboards":
     st.title("🏆 Power & Velocity Team Leaderboards")
     st.write("Live program rankings derived from absolute maximum output thresholds.")
+    
     tab1, tab2, tab3 = st.tabs(["⚡ Top 20m Fly Times", "🛫 Top 30m Blocks", "🏃 Projected 100m Dash"])
     
     with tab1:
@@ -271,10 +272,11 @@ elif app_mode == "🏆 Team Leaderboards":
             
     with tab3:
         projected_list = []
-        for _, athlete in st.session_state.iterrows():
+        for _, athlete in st.session_state.athletes.iterrows():
             ath_id = athlete['id']
             best_fly = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == ath_id) & (st.session_state.workout_logs['type'] == "20m_fly")]['fat'].min()
             best_block = st.session_state.workout_logs[(st.session_state.workout_logs['athlete_id'] == ath_id) & (st.session_state.workout_logs['type'] == "30m_block")]['fat'].min()
+            
             p_100 = calculate_precise_100m(best_block, best_fly, athlete['gender'], False)
             if p_100:
                 projected_list.append({
