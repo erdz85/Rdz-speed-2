@@ -117,7 +117,6 @@ is_hand = timing_method == "Hand-Timed"
 app_portal = st.sidebar.radio("Go To Module Portal:", [
     "👥 Roster & Onboarding Hub",
     "⏱️ Workout Tracker",
-    "🏋️ Workout Logger", 
     "🏆 Team Leaderboards", 
     "📈 Athlete Progress Trends",
     "🤝 4x100m Relay Builder",
