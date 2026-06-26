@@ -276,7 +276,7 @@ if app_portal == "👥 Roster & Onboarding Hub":
 # ==========================================
 # MODULE 2: WORKOUT LOGGER & LIVE SESSION
 # ==========================================
-elif app_mode == "🏋️ Workout Logger":
+elif app_portal == "🏋️ Workout Logger":
     st.title("🏋️ Live Speed Session Dashboard")
     
     # -------------------------------------------------------------
