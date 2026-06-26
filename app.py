@@ -503,54 +503,144 @@ elif app_portal == "📈 ... Athlete Progress Trends":
             """, unsafe_allow_html=True)
 
 # ==========================================
-# MODULE: 4x100M RELAY BUILDER
+# MODULE 5: 4x100m RELAY BUILDER
 # ==========================================
-# FIXED: Changed app_mode to app_portal to match global sidebar navigation state
-elif app_portal == "🤝 4x100m Relay Builder" or app_portal == "🤝 4x100m Relay Optimizer":
+elif app_portal == "🤝 4x100m Relay Builder":
     st.title("🤝 4x100m Exchange & Relay Optimizer")
     st.markdown("Uses automatic fly-to-block differential metrics to define handoff marks.")
+
+    # Check if we have logs to compute statistics from
+    if ('workout_logs' not in st.session_state or 
+        st.session_state.workout_logs.empty or 
+        'athletes' not in st.session_state or 
+        st.session_state.athletes.empty):
+        
+        st.warning("⚠️ No workout log data found. Showing blueprint fallback preview utilizing template metrics.")
+        
+        # Spec-matched blueprint fallback with Leg 2 explicitly mapped to the top flyer
+        relay_lineup = [
+            {"leg": 1, "name": "Jordan Davis", "role": "Starter (Curve Acceleration)", "metric_label": "Best 30m Block", "time": 4.10},
+            {"leg": 2, "name": "Marcus Anderson", "role": "Max Velocity Straight (Extended Distance)", "metric_label": "Best 20m Fly", "time": 1.98},
+            {"leg": 3, "name": "Trey Williams", "role": "Curve Mastery Threshold", "metric_label": "Best 20m Fly", "time": 2.04},
+            {"leg": 4, "name": "Xavier Thomas", "role": "Anchor (Closer)", "metric_label": "Best 20m Fly", "time": 2.10}
+        ]
+    else:
+        # --- DATA ENGINE: COMPUTE BEST LIFETIME METRICS PER ATHLETE ---
+        logs = st.session_state.workout_logs.copy()
+        
+        # Extract best 20m_fly and 30m_block times per individual athlete
+        fly_df = logs[logs['type'] == '20m_fly'].groupby('athlete_id')['fat'].min().rename('best_fly')
+        block_df = logs[logs['type'] == '30m_block'].groupby('athlete_id')['fat'].min().rename('best_block')
+        
+        # Merge best historical marks back with baseline athlete profiles
+        roster = st.session_state.athletes.copy()
+        roster = roster.merge(fly_df, left_on='id', right_index=True, how='left')
+        roster = roster.merge(block_df, left_on='id', right_index=True, how='left')
+        
+        # Drop individuals missing the core 20m fly profiles
+        valid_pool = roster.dropna(subset=['best_fly']).copy()
+        
+        if len(valid_pool) < 4:
+            st.info("💡 Note: Data-calculated roster pooling requires at least 4 athletes with logged 20m Fly times. Using default varsity blueprint configuration entries below:")
+            relay_lineup = [
+                {"leg": 1, "name": "Jordan Davis", "role": "Starter (Curve Acceleration)", "metric_label": "Best 30m Block", "time": 4.10},
+                {"leg": 2, "name": "Marcus Anderson", "role": "Max Velocity Straight (Extended Distance)", "metric_label": "Best 20m Fly", "time": 1.98},
+                {"leg": 3, "name": "Trey Williams", "role": "Curve Mastery Threshold", "metric_label": "Best 20m Fly", "time": 2.04},
+                {"leg": 4, "name": "Xavier Thomas", "role": "Anchor (Closer)", "metric_label": "Best 20m Fly", "time": 2.10}
+            ]
+        else:
+            # Sort full pool to allocate roles based on tactical track dynamics
+            # 1. Isolate the absolute best block starter for Leg 1
+            best_starter_row = valid_pool.sort_values(by='best_block', ascending=True).iloc[0]
+            starter_id = best_starter_row['id']
+            
+            # 2. Extract remaining pool and sort purely by raw 20m Fly speed (lowest time first)
+            remaining_pool = valid_pool[valid_pool['id'] != starter_id].sort_values(by='best_fly', ascending=True)
+            
+            # TACTICAL ASSIGNMENT RULES:
+            # #1 Flyer goes to Leg 2 (Extended distance straightaway strategy)
+            leg2_row = remaining_pool.iloc[0]
+            # #2 Flyer goes to Leg 4 (The anchor closer)
+            leg4_row = remaining_pool.iloc[1]
+            # #3 Flyer goes to Leg 3 (Curve specialist transition)
+            leg3_row = remaining_pool.iloc[2]
+            
+            relay_lineup = [
+                {
+                    "leg": 1, 
+                    "name": best_starter_row['name'], 
+                    "role": "Starter (Curve Acceleration)", 
+                    "metric_label": "Best 30m Block" if pd.notna(best_starter_row['best_block']) else "Best 20m Fly (Fallback)",
+                    "time": best_starter_row['best_block'] if pd.notna(best_starter_row['best_block']) else best_starter_row['best_fly']
+                },
+                {"leg": 2, "name": leg2_row['name'], "role": "Max Velocity Straight (Extended Distance)", "metric_label": "Best 20m Fly", "time": leg2_row['best_fly']},
+                {"leg": 3, "name": leg3_row['name'], "role": "Curve Mastery Threshold", "metric_label": "Best 20m Fly", "time": leg3_row['best_fly']},
+                {"leg": 4, "name": leg4_row['name'], "role": "Anchor (Closer)", "metric_label": "Best 20m Fly", "time": leg4_row['best_fly']}
+            ]
+
+    # --- UI DISPLAY: THE 4x100M CONFIGURATION GRID ---
+    st.subheader("🏆 Data-Optimized Relay Lineup Order")
     
-    active_athletes_df = st.session_state.athletes
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Incoming Runner (Max Velocity)")
-        inc_name = st.selectbox("Select Incoming Athlete:", active_athletes_df.apply(lambda r: f"{r['first_name']} {r['last_name']}", axis=1).unique(), key="inc_run_sel")
-        inc_first, inc_last = inc_name.split(" ", 1)
-        inc_id = active_athletes_df[(active_athletes_df["first_name"] == inc_first) & (active_athletes_df["last_name"] == inc_last)]["athlete_id"].values[0]
-        
-        # Pull best 20m fly time from state schemas
-        inc_fly_df = st.session_state.workout_logs[(st.session_state.workout_logs["athlete_id"] == inc_id) & (st.session_state.workout_logs["type"] == "20m_fly")]
-        inc_fly = inc_fly_df["normalized_fat_time"].min() if not inc_fly_df.empty else 2.10
-        st.metric("Best 20m Fly Metric Standard", f"{inc_fly:.2f}s FAT")
-        
-    with col2:
-        st.subheader("Outgoing Runner (Acceleration)")
-        out_name = st.selectbox("Select Outgoing Athlete:", active_athletes_df.apply(lambda r: f"{r['first_name']} {r['last_name']}", axis=1).unique(), key="out_run_sel", index=1 if len(active_athletes_df) > 1 else 0)
-        out_first, out_last = out_name.split(" ", 1)
-        out_id = active_athletes_df[(active_athletes_df["first_name"] == out_first) & (active_athletes_df["last_name"] == out_last)]["athlete_id"].values[0]
-        
-        # Pull best 30m block time from state schemas
-        out_blk_df = st.session_state.workout_logs[(st.session_state.workout_logs["athlete_id"] == out_id) & (st.session_state.workout_logs["type"] == "30m_block")]
-        out_block = out_blk_df["normalized_fat_time"].min() if not out_blk_df.empty else 4.10
-        st.metric("Best 30m Block Metric Standard", f"{out_block:.2f}s FAT")
-        
+    cols = st.columns(4)
+    for idx, runner in enumerate(relay_lineup):
+        with cols[idx]:
+            st.markdown(f"### **Leg {runner['leg']}**")
+            st.caption(f"🎭 {runner['role']}")
+            with st.container(border=True):
+                st.markdown(f"🏃 **{runner['name']}**")
+                st.metric(label=runner['metric_label'], value=f"{runner['time']:.2f}s FAT")
+
     st.write("---")
+    st.subheader("📏 Exchange Zone Go-Mark Target Analysis")
+
+    # --- MATHEMATICAL ENGINE: DYNAMIC GO-MARK GENERATION ---
+    def calculate_go_mark(inc_fly, out_time):
+        """
+        Calculates relay go-marks based on incoming fly time & outgoing acceleration.
+        Uses 30m Block Start with a dynamic fallback to 20m Fly if block data isn't logged.
+        """
+        # Formulate a dynamic baseline if dealing with non-block acceleration values
+        # If outgoing runner time is a fly, scale it out to estimate a standing start threshold
+        adj_out_acceleration = out_time if out_time > 3.0 else (out_time * 1.95)
+        
+        # Calculate dynamic physical gap constraints
+        base_steps = (adj_out_acceleration / inc_fly) * 7.4
+        return max(12.0, min(24.0, round(base_steps, 1)))
+
+    # Fetch ordered values from the generated lineup matrix array
+    t1 = relay_lineup[0]['time']
+    t2 = relay_lineup[1]['time']
+    t3 = relay_lineup[2]['time']
+    t4 = relay_lineup[3]['time']
+
+    # Generate calculations for the three passing exchanges
+    exch1_steps = calculate_go_mark(t1, t2)
+    exch2_steps = calculate_go_mark(t2, t3)
+    exch3_steps = calculate_go_mark(t3, t4)
+
+    # Render results in high-impact metric container cards
+    e1, e2, e3 = st.columns(3)
     
-    # Differential exchange step marks algorithm execution
-    try:
-        raw_mark = (float(out_block) - float(inc_fly)) * 7.5
-        go_mark_steps = max(1, round(raw_mark, 1))
-    except:
-        go_mark_steps = 18.5
-    
-    st.markdown(f"""
-    <div class="metric-card">
-        <h3>📏 Recommended Exchange Go-Mark Target</h3>
-        <h1 style="color: #ff4b4b; font-size: 3.5rem; margin: 5px 0;">{go_mark_steps} STEPS</h1>
-        <p><b>Handoff Execution Instruction:</b> Place the go-mark tape exactly <b>{go_mark_steps} steps</b> backward behind the acceleration zone line. When the incoming runner reaches the tape mark, the outgoing athlete drives out blindly.</p>
-    </div>
-    """, unsafe_allow_html=True)
+    with e1:
+        with st.container(border=True):
+            st.markdown("### 🪵 Exchange 1")
+            st.caption(f"Leg 1 ({relay_lineup[0]['name']}) ➔ Leg 2 ({relay_lineup[1]['name']})")
+            st.markdown(f"## 🏁 **{exch1_steps} STEPS**")
+            st.info("📍 Place tape backward from the start of the acceleration zone index.")
+
+    with e2:
+        with st.container(border=True):
+            st.markdown("### 🪵 Exchange 2")
+            st.caption(f"Leg 2 ({relay_lineup[1]['name']}) ➔ Leg 3 ({relay_lineup[2]['name']})")
+            st.markdown(f"## 🏁 **{exch2_steps} STEPS**")
+            st.info("📍 Place tape backward from the start of the acceleration zone index.")
+
+    with e3:
+        with st.container(border=True):
+            st.markdown("### 🪵 Exchange 3")
+            st.caption(f"Leg 3 ({relay_lineup[2]['name']}) ➔ Leg 4 ({relay_lineup[3]['name']})")
+            st.markdown(f"## 🏁 **{exch3_steps} STEPS**")
+            st.info("📍 Place tape backward from the start of the acceleration zone index.")
 
 # ==========================================
 # MODULE 6: AD REPORT EXPORT ("THE AD CLOSER")
