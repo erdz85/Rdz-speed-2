@@ -227,33 +227,30 @@ class WorkoutTrackerTab(QWidget):
         ctrl_box = QHBoxLayout()
         self.timing_toggle = QCheckBox("🚨 Hand-Timed Session Mode Active (Apply Rule Normalization)")
         self.timing_toggle.stateChanged.connect(self.sync_session_timing_mode)
-        ctrl_box.addWidget(self.timing_toggle)
-        ctrl_box.addStretch()
-        layout.addLayout(ctrl_box)
-
-        # Track Data Capture Form Matrix
-        main_layout = QHBoxLayout()
-table_group = QGroupBox("Performance Tracking Matrix")
-tg_layout = QVBoxLayout(table_group)
-self.table = QTableWidget(0, 5)
-self.table.setHorizontalHeaderLabels(["Athlete Profile Name", "Raw 20m Fly (s)", "Raw 30m Block (s)", "FAT Normal Fly", "FAT Normal Block"])
-        # --- STREAMLIT COMPATIBLE TIMING LOGIC ---
-        # Replaces self.timing_toggle.isChecked() with a native web toggle
+                # --- STREAMLIT COMPATIBLE TIMING LOGIC ---
+        # Replaces self.timing_toggle with a native web layout structure
         is_hand = st.toggle("Enable Hand-Timed Mode (Applies conversion adjustments)", key="timing_gate_toggle")
         
         # Sync the timing mode across your athlete state matrix
         if 'athletes' in st.session_state:
-            # Add a timing mode tracker column to the active roster dataframe
             st.session_state.athletes['is_hand_timed'] = is_hand
             
-        # Display the interactive grid view using native Streamlit dataframes
-        st.subheader("📊 Session Roster Activity Monitor")
-        st.dataframe(
+        # Displays the "Performance Tracking Matrix" group layout as an interactive web editor
+        st.subheader("📊 Performance Tracking Matrix")
+        
+        # This gives you an editable grid on the webpage matching your exact old horizontal header rows
+        edited_roster = st.data_editor(
             st.session_state.athletes,
+            column_config={
+                "name": "Athlete Profile Name",
+                "gender": "Gender",
+                "group": "Training Group",
+                "grade": "Grade",
+                "is_hand_timed": "Hand Timed Mode Activated"
+            },
             use_container_width=True,
             hide_index=True
         )
-
 if not item or not item.text().strip(): return
 try:
 val = float(item.text())
