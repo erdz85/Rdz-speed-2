@@ -286,31 +286,117 @@ elif app_mode == "📈 Athlete Progress":
             st.info("Provide at least 1 historical 30m Block entry to populate acceleration tracking vectors.")
 
 # ==========================================
-# MODULE 3: WORKOUT LOGGER & MANAGEMENT TABLE
+# MODULE 3: WORKOUT LOGGER & LIVE SESSION
 # ==========================================
 elif app_mode == "🏋️ Workout Logger":
-    st.title("🏋️ High-Frequency Workout Data Logger")
-    st.write("Input newly converted FAT times straight from timing gates into the core ledger database.")
+    st.title("🏋️ Live Speed Session Dashboard")
     
-    col1, col2 = st.columns(2)
-    with col1:
-        log_date = st.date_input("Workout Session Date", datetime.today())
-        log_athlete = st.selectbox("Select Competing Athlete:", st.session_state.athletes['name'].unique(), key="log_ath")
-        log_id = st.session_state.athletes[st.session_state.athletes['name'] == log_athlete]['id'].values
-        
-    with col2:
-        log_type = st.selectbox("Test Metric Vector Profile:", ["20m_fly", "30m_block"])
-        log_time = st.number_input("Recorded FAT Time Value (seconds):", min_value=0.00, max_value=15.00, value=2.50, step=0.01)
-        
-    if st.button("📥 Save Repetition Entry to History Logs"):
-        new_log_row = {"date": str(log_date), "athlete_id": log_id, "type": log_type, "fat": float(log_time)}
-        st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log_row])], ignore_index=True)
-        st.success(f"Successfully recorded {log_time}s ({log_type}) for {log_athlete}!")
-        st.rerun()
-        
+    # -------------------------------------------------------------
+    # CONTROL PANEL HEADER
+    # -------------------------------------------------------------
+    head_col1, head_col2 = st.columns([3, 1])
+    with head_col1:
+        st.write(f"🗓️ **Active Session Date:** {datetime.today().strftime('%B %d, %Y')}")
+    with head_col2:
+        if st.button("🛑 Clear Current Live Board View", use_container_width=True):
+            st.toast("Board views refreshed!")
+
+    # 1. Timing System Variable Override Gate
     st.write("---")
-    st.subheader("🛠️ Review, Modify, or Delete Saved Workouts")
-    st.info("💡 Double-click any cell below to modify a time/date. To delete data, select the row using the left checkbox margin and press the Delete key on your keyboard.")
+    st.subheader("⚙️ Global Session Configurations")
+    timing_type = st.radio(
+        "Select Active Session Capture Source Protocol:",
+        ["◯ Freelap / Electronic FAT", "● Hand-Timed / Manual Stopwatch"],
+        horizontal=True
+    )
+    is_hand = (timing_type == "● Hand-Timed / Manual Stopwatch")
+
+    # 2. Metric Mode Configuration Selector
+    session_metric = st.selectbox("Active Testing Drill Vector Type:", ["20m_fly", "30m_block"])
+
+    # -------------------------------------------------------------
+    # LIVE SPRINT REPETITION ENTRY TRACKER Matrix
+    # -------------------------------------------------------------
+    st.write("---")
+    st.subheader("⏱️ Live Roster Quick-Log Interface")
+    st.info("💡 Tap any entry block or input fields to log an athlete's time on the fly.")
+    
+    # Quick filter athletes text search bar
+    search_query = st.text_input("🔍 Quick Search Athlete Profile...", "").strip().lower()
+    
+    # Filter out inactive athletes and apply search terms
+    display_roster = active_athletes_df.copy()
+    if search_query:
+        display_roster = display_roster[display_roster['name'].lower().str.contains(search_query)]
+
+    # Render individual rows inside an optimized form grid layout
+    if not display_roster.empty:
+        for _, athlete in display_roster.iterrows():
+            ath_id = athlete['id']
+            ath_name = athlete['name']
+            
+            # Fetch the most recent trial record time from logs
+            ath_history = st.session_state.workout_logs[
+                (st.session_state.workout_logs['athlete_id'] == ath_id) & 
+                (st.session_state.workout_logs['type'] == session_metric)
+            ]
+            last_rep_str = f"{ath_history.iloc[-1]['fat']:.2f}s" if not ath_history.empty else "None"
+            
+            # Row Grid Layout Setup
+            row_col1, row_col2, row_col3 = st.columns([2, 1, 0.5])
+            
+            with row_col1:
+                st.markdown(f"🏃‍♂️ **{ath_name}** <br/> <small style='color:gray;'>Previous Session Rep: {last_rep_str}</small>", unsafe_allow_html=True)
+            
+            with row_col2:
+                # Keypad friendly input configuration container
+                input_val = st.number_input(
+                    "Enter Time", 
+                    min_value=0.00, max_value=15.00, value=0.00, step=0.01, 
+                    key=f"input_{ath_id}", label_visibility="collapsed"
+                )
+                
+            with row_col3:
+                if st.button("OK", key=f"btn_{ath_id}", use_container_width=True):
+                    if input_val > 0:
+                        # Append the trial input directly to the persistent session state data matrices
+                        new_log_row = {
+                            "date": str(datetime.today().date()), 
+                            "athlete_id": ath_id, 
+                            "type": session_metric, 
+                            "fat": float(input_val)
+                        }
+                        st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log_row])], ignore_index=True)
+                        st.toast(f"Logged {input_val}s for {ath_name}!")
+                        st.rerun()
+                    else:
+                        st.error("Enter a valid time.")
+            st.write("<hr style='margin: 0.5em 0px;'/>", unsafe_allow_html=True)
+    else:
+        st.warning("No active athletes match your current filter rules.")
+
+    # -------------------------------------------------------------
+    # REAL-TIME LOG HISTORY OVERVIEW TAB
+    # -------------------------------------------------------------
+    st.write("---")
+    st.subheader("📊 Recent Activity (This Session Logs)")
+    
+    today_str = str(datetime.today().date())
+    todays_logs = st.session_state.workout_logs[st.session_state.workout_logs['date'] == today_str]
+    
+    if not todays_logs.empty:
+        display_today = todays_logs.merge(st.session_state.athletes, left_on='athlete_id', right_on='id', how='left')
+        for _, log in display_today.iterrows():
+            capture_label = "Hand" if is_hand else "FAT"
+            st.markdown(f"• **{log['name']}**: {log['fat']:.2f}s ({capture_label}) ➔ Drill: *{log['type']}*")
+    else:
+        st.info("No repetitions logged yet during today's track session.")
+
+    # -------------------------------------------------------------
+    # PART 3: THE COMPREHENSIVE BACKEND DATA MANAGEMENT SHEET
+    # -------------------------------------------------------------
+    st.write("---")
+    st.subheader("🛠️ Master History Ledger Editor")
     
     if not st.session_state.workout_logs.empty:
         display_logs = st.session_state.workout_logs.merge(
@@ -321,7 +407,7 @@ elif app_mode == "🏋️ Workout Logger":
             display_logs,
             column_config={
                 "date": st.column_config.TextColumn("Session Date"),
-                "name": st.column_config.TextColumn("Athlete Profile Name", disabled=True),
+                "name": st.column_config.TextColumn("Athlete Name", disabled=True),
                 "type": st.column_config.SelectboxColumn("Metric Profile", options=["20m_fly", "30m_block"]),
                 "fat": st.column_config.NumberColumn("FAT Time (seconds)", min_value=0.00, max_value=15.00, format="%.2f")
             },
@@ -334,8 +420,6 @@ elif app_mode == "🏋️ Workout Logger":
             st.session_state.workout_logs = updated_db
             st.toast("Database logs updated successfully!")
             st.rerun()
-    else:
-        st.info("The history ledger database is currently empty.")
 
 # ==========================================
 # MODULE 4: TEAM LEADERBOARDS
