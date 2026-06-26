@@ -119,7 +119,7 @@ app_portal = st.sidebar.radio("Go To Module Portal:", [
     "⏱️ Live Session Dashboard", 
     "🏆 Team Leaderboards", 
     "📈 Athlete Progress Trends",
-    "🤝 4x100m Relay Builder",  # Ensure this matches exactly
+    "🤝 4x100m Relay Builder",
     "📄 AD Report Export"
 ])
 
