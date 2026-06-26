@@ -4,3 +4,4 @@ pandas
 plotly-express
 qrcode
 streamlit-javascript
+reportlab
