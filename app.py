@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for track-coaching aesthetics and oversized mobile keypad layouts
+# Custom CSS for track-coaching aesthetics and responsive dashboard panels
 st.markdown("""
 <style>
     .metric-card { background-color: #f8f9fa; border-radius: 10px; padding: 15px; border-left: 5px solid #ff4b4b; margin-bottom: 15px;}
@@ -74,7 +74,7 @@ if "view" in st.query_params and st.query_params["view"] == "register":
 
 
 # ==========================================
-# 4. HELPER FUNCTIONS
+# 4. DATA PROJECTION & MATHEMATICAL ENGINES
 # ==========================================
 def calculate_relay_go_mark(inc_fly, out_block):
     try:
@@ -84,33 +84,36 @@ def calculate_relay_go_mark(inc_fly, out_block):
         return 12.0
 
 def calculate_precise_100m(thirty_block, twenty_fly, gender, is_hand_timed=False):
-    if thirty_block is None or twenty_fly is None or pd.isna(thirty_block) or pd.isna(twenty_fly):
+    # If there is no fly time at all, we cannot compute any projection model
+    if twenty_fly is None or pd.isna(twenty_fly) or float(twenty_fly) == 0:
         return None
         
-    # Normalize manual stopwatch errors to official FAT standards
-    thirty_block = float(thirty_block)
     twenty_fly = float(twenty_fly)
-    if is_hand_timed:
-        thirty_block += 0.24
-        twenty_fly += 0.15 
-        
-    # Isolate top-end 10m split equivalent
-    ten_split = twenty_fly / 2.0
     
-    # Base calculation: 30m start + remaining 70m at max velocity
+    # Standardize manual hand-timed metrics up to official electronic limits
+    if is_hand_timed:
+        twenty_fly += 0.15
+        if thirty_block is not None and not pd.isna(thirty_block):
+            thirty_block = float(thirty_block) + 0.24
+
+    # --- FALLBACK RUN LOGIC: Activates if 30m block metric data does not exist ---
+    if thirty_block is None or pd.isna(thirty_block) or float(thirty_block) == 0:
+        ten_split = twenty_fly / 2.0
+        if str(gender).lower() == "male":
+            projected_100m = (ten_split * 10) + 1.05  # Formula Varonil
+        else:
+            projected_100m = (ten_split * 10) + 1.15  # Formula Femenil
+        return round(projected_100m, 2)
+
+    # --- CORE RUN LOGIC: Activates if BOTH inputs are present (Piecewise Model) ---
+    thirty_block = float(thirty_block)
+    ten_split = twenty_fly / 2.0
     base_time = thirty_block + (7.0 * ten_split)
     
-    # Apply dynamic Speed Endurance Decay Constants based on performance tiers
     if str(gender).lower() == "male":
-        if base_time < 11.0:
-            decay_constant = 0.12  # Elite Boy
-        else:
-            decay_constant = 0.18  # Varsity Boy
-    else: # Female
-        if base_time < 12.2:
-            decay_constant = 0.15  # Elite Girl
-        else:
-            decay_constant = 0.25  # Varsity Girl
+        decay_constant = 0.12 if base_time < 11.0 else 0.18
+    else:
+        decay_constant = 0.15 if base_time < 12.2 else 0.25
             
     return round(base_time + decay_constant, 2)
 
@@ -213,14 +216,13 @@ elif app_mode == "📈 Athlete Progress":
                 st.warning(f"⚠️ CNS Fatigue Advisory Warning Alert: Velocity dropped by {round(decay_percent,1)}% on last rep. Advise immediate recovery down-regulation.")
             else:
                 st.success("🟢 CNS Efficiency Stable. Athlete is primed for max velocity output.")
-    else:
-        st.info("Provide at least 1 historical entry to populate tracking vectors.")
-
+            else:
+                st.info("Provide at least 1 historical entry to populate tracking vectors.")
 
 # ==========================================
 # MODULE 3: WORKOUT LOGGER
 # ==========================================
-if app_mode == "🏋️ Workout Logger":
+elif app_mode == "🏋️ Workout Logger":
     st.title("🏋️ High-Frequency Workout Data Logger")
     st.write("Input newly converted FAT times straight from timing gates into the core ledger database.")
     
@@ -285,7 +287,7 @@ elif app_mode == "🏆 Team Leaderboards":
             leaderboard_100m = pd.DataFrame(projected_list).sort_values(by="Projected 100m Time")
             st.dataframe(leaderboard_100m, use_container_width=True, hide_index=True)
         else:
-            st.info("Ensure athletes have both a 20m Fly and a 30m Block entry logged to calculate 100m projections.")
+            st.info("Ensure athletes have at least a 20m Fly logged to generate estimated 100m projections.")
 
 # ==========================================
 # MODULE 5: 4x100M RELAY BUILDER
@@ -348,7 +350,7 @@ elif app_mode == "📄 AD Report Generator":
         <p>Total Tracked Sprinters: {len(st.session_state.athletes)} Active Athletes</p>
         <p>Primary Metric Target Matrix Focus: 20m Flying Sprints & 30m Stationary Blocks</p>
         <hr/>
-        <h4>📈 TEAM VELOCITY PROJECTIONS (PIECEWISE MODEL)</h4>
+        <h4>📈 TEAM VELOCITY PROJECTIONS (PIECEWISE / FALLBACK RUN ENGINES)</h4>
         <ul>
             {report_rows}
         </ul>
