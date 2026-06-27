@@ -170,8 +170,7 @@ if app_portal == "👥 Roster & Onboarding Hub":
                 disabled=True
             ),
             "name": st.column_config.TextColumn(
-                "🏃 Full Name", 
-                placeholder="Enter athlete's name..."
+                "🏃 Full Name"
             ),
             "gender": st.column_config.SelectboxColumn(
                 "⚧️ Gender",
