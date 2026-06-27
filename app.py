@@ -4,23 +4,21 @@ import os
 from datetime import datetime
     
 def get_unified_projection(session_type, fat_time, block_val, fly_val, gender):
-    """The single source of truth for all 100m projections."""
-    gender_const = 1.17 if 'female' in str(gender).lower() else 1.15
+    """
+    Unified projection model using 10m split anchor.
+    """
+    # 1. Determine base fly time (use input if available, otherwise default)
+    f_time = fat_time if session_type == "20m_fly" else (fly_val if fly_val and fly_val > 0 else 2.2)
     
-    # 1. Attempt to use your custom high-precision function
-    if 'calculate_precise_100m' in globals():
-        if session_type == "20m_fly":
-            # Pass block_val as default if PR exists, or 4.0 as safety
-            return calculate_precise_100m(thirty_block=block_val or 4.0, twenty_fly=fat_time, gender=gender)
-        else:
-            return calculate_precise_100m(thirty_block=fat_time, twenty_fly=fly_val or 2.2, gender=gender)
-            
-    # 2. Hard-coded Fallback (Standardized)
-    if session_type == "20m_fly":
-        return round((fat_time * 5.0) + gender_const, 2)
+    # 2. Apply formulas based on gender
+    if 'female' in str(gender).lower():
+        # Femenil: (Fly/2 * 10) + 1.15
+        projection = (f_time / 2 * 10) + 1.15
     else:
-        # Standardized start projection for 30m block
-        return round((fat_time * 2.8) + 0.5, 2)
+        # Varonil: (Fly/2 * 10) + 1.05
+        projection = (f_time / 2 * 10) + 1.05
+    
+    return round(projection, 2)
         
 st.set_page_config(
     page_title="High-Performance Sprint Analytics",
