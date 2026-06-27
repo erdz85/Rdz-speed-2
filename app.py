@@ -1102,14 +1102,15 @@ elif app_portal == "📄 AD Report Export":
 # MODULE: WORKOUT TRACKER
 # ==========================================
 elif app_portal == "⏱️ Workout Tracker":
-    st.title("⏱️ Live Workout Tracker")
+    st.title("⏱️ Live Sprint Repetition Entry Tracker")
+    st.markdown("Log active sprint intervals while referencing baseline performance records side-by-side.")
     
     # 1. Top-Level Drill Controls
     col1, col2 = st.columns(2)
     with col1:
-        timing_system = st.radio("Timing Method:", ["Electronic / FAT (Freelap)", "Hand-Timed (Stopwatch)"])
+        timing_system = st.radio("Timing System Method:", ["Electronic / FAT (Freelap)", "Hand-Timed (Stopwatch)"], horizontal=True)
     with col2:
-        session_type = st.selectbox("Drill Profile:", ["20m_fly", "30m_block"])
+        session_type = st.selectbox("Active Drill Profile Type:", ["20m_fly", "30m_block"])
         
     st.write("---")
     
@@ -1134,79 +1135,116 @@ elif app_portal == "⏱️ Workout Tracker":
             
         gender_key = 'gender' if 'gender' in roster_view.columns else ('sex' if 'sex' in roster_view.columns else None)
 
-        # 3. Clean Table Header for Scannability
-        h1, h2, h3 = st.columns([4, 3, 2])
-        with h1: st.markdown("🗣️ **Athlete Roster Name**")
-        with h2: st.markdown("⏱️ **Enter Split / Time (s)**")
-        with h3: st.markdown("💾 **Action**")
-        st.write("")
+        # --- BANISH NAN / GHOST ROWS ---
+        if name_key in roster_view.columns:
+            roster_view = roster_view.dropna(subset=[name_key])
+            roster_view = roster_view[roster_view[name_key].astype(str).str.strip() != ""]
+            roster_view = roster_view[roster_view[name_key].astype(str).str.lower() != "nan"]
 
-        # 4. Athlete Input Grid Rendering Loop
-        for index, athlete in roster_view.iterrows():
-            athlete_id = str(athlete[id_key]).strip()
-            athlete_name = athlete[name_key]
-            athlete_gender = str(athlete[gender_key]).lower() if gender_key and pd.notna(athlete[gender_key]) else 'male'
+        # 3. Pull Historical Performance Metrics for Side-by-Side Display
+        history_fly = {}
+        history_block = {}
+        
+        if 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty:
+            logs_clean = st.session_state.workout_logs.copy()
+            logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
             
-            # Weighted column ratios [4, 3, 2] give names more horizontal breathing room
-            c1, c2, c3 = st.columns([4, 3, 2])
+            # Map tracking columns safely to numeric type
+            fat_col = 'fat' if 'fat' in logs_clean.columns else logs_clean.columns[-2]
+            logs_clean[fat_col] = pd.to_numeric(logs_clean[fat_col], errors='coerce')
+            logs_clean['athlete_id'] = logs_clean['athlete_id'].astype(str).str.strip()
             
-            with c1:
-                # Vertical alignment centering padding hack for clean layout row alignment
-                st.markdown(f"<div style='padding-top: 5px;'><b>{athlete_name}</b></div>", unsafe_allow_html=True)
-            
-            with c2:
-                raw_time = st.number_input(
-                    label=f"Split for {athlete_name}", 
-                    min_value=0.0, 
-                    max_value=10.0, 
-                    step=0.01, 
-                    key=f"in_{athlete_id}",
-                    label_visibility="collapsed" # Hides annoying repetitive generated labels
-                )
-            
-            with c3:
-                if st.button("Save Log", key=f"btn_{athlete_id}", use_container_width=True):
-                    if raw_time <= 0:
-                        st.error("⚠️ Please enter a valid time time above 0.00s.")
-                    else:
-                        from datetime import datetime
-                        
-                        # Apply fallback stopwatch math rules safely
-                        fat_time = raw_time
-                        if timing_system == "Hand-Timed (Stopwatch)":
-                            if 'normalize_hand_fly' in globals():
-                                fat_time = normalize_hand_fly(raw_time)
+            # Extract all-time personal records per drill profile
+            history_fly = logs_clean[logs_clean['type'] == '20m_fly'].groupby('athlete_id')[fat_col].min().to_dict()
+            history_block = logs_clean[logs_clean['type'] == '30m_block'].groupby('athlete_id')[fat_col].min().to_dict()
+
+        # 4. Clean Table Header Matching Your Layout Exactly
+        h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 2, 2])
+        with h1: st.markdown("🏃 **Athlete Name**")
+        with h2: st.markdown("⚡ **Best Fly**")
+        with h3: st.markdown("🧱 **Best Block**")
+        with h4: st.markdown("⏱️ **Enter Rep Time (s)**")
+        with h5: st.markdown("💾 **Action**")
+        st.markdown("<hr style='margin: 0px 0px 12px 0px; border-color: #555;' />", unsafe_allow_html=True)
+
+        # 5. Athlete Input Grid Rendering Loop
+        if roster_view.empty:
+            st.warning("⚠️ Active roster entries detected, but all names on file are blank or corrupt. Check Roster Hub.")
+        else:
+            for index, athlete in roster_view.iterrows():
+                athlete_id = str(athlete[id_key]).strip()
+                athlete_name = str(athlete[name_key]).strip()
+                athlete_gender = str(athlete[gender_key]).lower() if gender_key and pd.notna(athlete[gender_key]) else 'male'
+                
+                # Fetch All-Time Personal Bests
+                best_fly_val = history_fly.get(athlete_id, None)
+                best_block_val = history_block.get(athlete_id, None)
+                
+                fly_display = f"⚡ {best_fly_val:.2f}s" if best_fly_val else "⚡ --"
+                block_display = f"🧱 {best_block_val:.2f}s" if best_block_val else "🧱 --"
+                
+                # Render Row Fields Layout
+                c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 2, 2])
+                
+                with c1:
+                    st.markdown(f"<div style='padding-top: 5px;'><b>{athlete_name}</b></div>", unsafe_allow_html=True)
+                
+                with c2:
+                    st.markdown(f"<div style='padding-top: 5px; color:#FF4B4B;'>{fly_display}</div>", unsafe_allow_html=True)
+                    
+                with c3:
+                    st.markdown(f"<div style='padding-top: 5px; color:#00E676;'>{block_display}</div>", unsafe_allow_html=True)
+                
+                with c4:
+                    raw_time = st.number_input(
+                        label=f"Split for {athlete_name}", 
+                        min_value=0.0, 
+                        max_value=10.0, 
+                        step=0.01, 
+                        key=f"in_{athlete_id}",
+                        label_visibility="collapsed"
+                    )
+                
+                with c5:
+                    if st.button("Log Rep", key=f"btn_{athlete_id}", use_container_width=True):
+                        if raw_time <= 0:
+                            st.error("⚠️ Enter valid split time.")
+                        else:
+                            from datetime import datetime
+                            
+                            # Standardize hand-timing rules
+                            fat_time = raw_time
+                            if timing_system == "Hand-Timed (Stopwatch)":
+                                if 'normalize_hand_fly' in globals():
+                                    fat_time = normalize_hand_fly(raw_time)
+                                else:
+                                    fat_time = raw_time + 0.24 
+                            
+                            # Calculate accurate curve projections safely 
+                            if 'calculate_projected_100m' in globals():
+                                proj = calculate_projected_100m(4.5, fat_time, athlete_gender) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete_gender)
                             else:
-                                fat_time = raw_time + 0.24 
-                        
-                        # Calculate accurate curve projections safely 
-                        if 'calculate_projected_100m' in globals():
-                            proj = calculate_projected_100m(4.5, fat_time, athlete_gender) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete_gender)
-                        else:
-                            # Accurate fallbacks matching your system parameters
-                            proj = (fat_time * 5.0) + 1.25 if session_type == "20m_fly" else (fat_time * 2.5) + 2.0
-                        
-                        # Generate Log Dictionary
-                        new_log = {
-                            "log_id": len(st.session_state.workout_logs) + 1 if ('workout_logs' in st.session_state and not st.session_state.workout_logs.empty) else 1,
-                            "date": datetime.today().strftime('%Y-%m-%d'),
-                            "athlete_id": athlete_id,
-                            "type": session_type,
-                            "raw": float(raw_time),
-                            "fat": float(fat_time),
-                            "proj_100": float(proj)
-                        }
-                        
-                        # Append securely back to main data frame log stacks
-                        log_entry_df = pd.DataFrame([new_log])
-                        if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
-                            st.session_state.workout_logs = log_entry_df
-                        else:
-                            st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, log_entry_df], ignore_index=True)
-                        
-                        st.toast(f"✅ Logged {fat_time:.2f}s for {athlete_name}!")
-                        st.rerun()
-
+                                proj = (fat_time * 5.0) + 1.25 if session_type == "20m_fly" else (fat_time * 2.5) + 2.0
+                            
+                            # Generate Log Dictionary
+                            new_log = {
+                                "log_id": len(st.session_state.workout_logs) + 1 if ('workout_logs' in st.session_state and not st.session_state.workout_logs.empty) else 1,
+                                "date": datetime.today().strftime('%Y-%m-%d'),
+                                "athlete_id": athlete_id,
+                                "type": session_type,
+                                "raw": float(raw_time),
+                                "fat": float(fat_time),
+                                "proj_100": float(proj)
+                            }
+                            
+                            log_entry_df = pd.DataFrame([new_log])
+                            if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
+                                st.session_state.workout_logs = log_entry_df
+                            else:
+                                st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, log_entry_df], ignore_index=True)
+                            
+                            st.toast(f"✅ Logged {fat_time:.2f}s for {athlete_name}!")
+                            st.rerun()
 # ==========================================
 # MODULE: LIVE SESSION DASHBOARD
 # ==========================================
