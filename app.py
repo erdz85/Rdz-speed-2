@@ -871,7 +871,7 @@ elif app_portal == "📈 Athlete Progress Trends":
 # ==========================================
 elif app_portal == "🤝 Relay Optimizer Pool": 
     st.title("🏆 Data-Optimized 4x100m Relay Builder")
-    st.markdown("This engine runs algorithmic sorting to map your fastest 4 available athletes into their ideal lane assignments.")
+    st.markdown("This engine runs algorithmic sorting to map your fastest 4 available athletes into their ideal lane assignments, while giving you final manual override control.")
     
     if 'athletes' not in st.session_state or st.session_state.athletes.empty:
         st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
@@ -911,74 +911,131 @@ elif app_portal == "🤝 Relay Optimizer Pool":
                 if pd.notna(b_fly) or pd.notna(b_block):
                     roster_metrics.append({
                         "id": ath_id, 
-                        "name": athlete[name_key],
+                        "name": str(athlete[name_key]).strip(),
                         "fly": float(b_fly) if pd.notna(b_fly) else 99.0,
                         "block": float(b_block) if pd.notna(b_block) else 99.0
                     })
 
         if len(roster_metrics) >= 4:
-            rdf = pd.DataFrame(roster_metrics)
+            rdf_suggest = pd.DataFrame(roster_metrics)
             
+            # 1. RUN AUTOMATED SEEDING SELECTION ALGORITHM (To establish base index settings)
             # Leg 1: Block Start Specialist 
-            leg1_runner = rdf.sort_values('block').iloc[0]
-            rdf = rdf[rdf['id'] != leg1_runner['id']]
+            s_leg1 = rdf_suggest.sort_values('block').iloc[0]
+            rdf_suggest = rdf_suggest[rdf_suggest['id'] != s_leg1['id']]
             
             # Leg 2: Direct Straight-Away Flyer
-            leg2_runner = rdf.sort_values('fly').iloc[0]
-            rdf = rdf[rdf['id'] != leg2_runner['id']]
+            s_leg2 = rdf_suggest.sort_values('fly').iloc[0]
+            rdf_suggest = rdf_suggest[rdf_suggest['id'] != s_leg2['id']]
             
             # Leg 4: The Anchor Closer
-            leg4_runner = rdf.sort_values('fly').iloc[0]
-            rdf = rdf[rdf['id'] != leg4_runner['id']]
+            s_leg4 = rdf_suggest.sort_values('fly').iloc[0]
+            rdf_suggest = rdf_suggest[rdf_suggest['id'] != s_leg4['id']]
             
-            # FIX: Sort the remaining dataframe before picking the Leg 3 Curve Specialist
-            rdf = rdf.sort_values('fly')
-            leg3_runner = rdf.iloc[0]
-            
-            l1_b = f"{leg1_runner['block']:.2f}s" if leg1_runner['block'] != 99.0 else "--"
-            l2_f = f"{leg2_runner['fly']:.2f}s" if leg2_runner['fly'] != 99.0 else "--"
-            l3_f = f"{leg3_runner['fly']:.2f}s" if leg3_runner['fly'] != 99.0 else "--"
-            l4_f = f"{leg4_runner['fly']:.2f}s" if leg4_runner['fly'] != 99.0 else "--"
+            # Leg 3: Curve Specialist
+            rdf_suggest = rdf_suggest.sort_values('fly')
+            s_leg3 = rdf_suggest.iloc[0]
 
-            st.subheader("⚡ Core Relay Pool Roster Selection Matrix")
+            # 2. BUILD INTERACTIVE MANUAL OVERRIDE UI Dropdowns
+            st.write("---")
+            st.subheader("🛠️ Interactive Lineup Customization")
+            st.caption("The system has pre-selected runners based on top performance metrics. Use the dropdown entries to tweak your final lane assignments.")
+
+            # Map selection list array exclusively from tracked candidates
+            available_names = [str(item['name']) for item in roster_metrics]
+            
             c1, c2, c3, c4 = st.columns(4)
             with c1:
-                st.metric("🏃‍♂️ Leg 1 (Block Starter)", leg1_runner['name'], f"Block: {l1_b}")
+                idx1 = available_names.index(s_leg1['name']) if s_leg1['name'] in available_names else 0
+                leg1_name = st.selectbox("Leg 1 (Block Start):", available_names, index=idx1)
             with c2:
-                st.metric("🏃‍♂️ Leg 2 (Straight Flyer)", leg2_runner['name'], f"Fly: {l2_f}")
+                idx2 = available_names.index(s_leg2['name']) if s_leg2['name'] in available_names else 0
+                leg2_name = st.selectbox("Leg 2 (Straight Flyer):", available_names, index=idx2)
             with c3:
-                st.metric("🏃‍♂️ Leg 3 (Curve Specialist)", leg3_runner['name'], f"Fly: {l3_f}")
+                idx3 = available_names.index(s_leg3['name']) if s_leg3['name'] in available_names else 0
+                leg3_name = st.selectbox("Leg 3 (Curve Specialist):", available_names, index=idx3)
             with c4:
-                st.metric("🏃‍♂️ Leg 4 (Anchor Closer)", leg4_runner['name'], f"Fly: {l4_f}")
-            
-            st.write("---")
-            st.subheader("🎯 AUTOMATED EXCHANGE ZONE MARK STEPS")
-            
-            def get_go_mark(fly_val, block_val):
-                if 'calculate_relay_go_mark' in globals():
-                    return calculate_relay_go_mark(fly_val, block_val)
-                else:
-                    f = fly_val if fly_val != 99.0 else 2.20
-                    b = block_val if block_val != 99.0 else 4.20
-                    return int(round((b - f) * 4.5 + 17))
+                idx4 = available_names.index(s_leg4['name']) if s_leg4['name'] in available_names else 0
+                leg4_name = st.selectbox("Leg 4 (Anchor Closer):", available_names, index=idx4)
 
-            mark_1to2 = get_go_mark(leg1_runner['fly'], leg2_runner['block'])
-            mark_2to3 = get_go_mark(leg2_runner['fly'], leg3_runner['block'])
-            mark_3to4 = get_go_mark(leg3_runner['fly'], leg4_runner['block'])
-            
-            st.markdown(f"""
-            * **Exchange 1 (Leg 1 to Leg 2):** Count out exactly `{mark_1to2} footsteps` backward from the apex checkmark point.
-            * **Exchange 2 (Leg 2 to Leg 3):** Count out exactly `{mark_2to3} footsteps` backward from the apex checkmark point.
-            * **Exchange 3 (Leg 3 to Leg 4):** Count out exactly `{mark_3to4} footsteps` backward from the apex checkmark point.
-            """)
+            # 3. SAFETY OVERLAP GUARDRAIL CHECK
+            selected_lineup = [leg1_name, leg2_name, leg3_name, leg4_name]
+            if len(set(selected_lineup)) < 4:
+                st.error("🚨 **Lineup Assignment Error:** You have assigned the same student-athlete to multiple relay positions! Ensure all 4 runners are distinct before calculating.")
+            else:
+                st.success("✅ **Lineup Validated:** Athlete allocation contains no overlaps.")
+                
+                # Isolate specific metric dictionaries linked to the selected roster selections
+                run_map = {item['name']: item for item in roster_metrics}
+                r1 = run_map[leg1_name]
+                r2 = run_map[leg2_name]
+                r3 = run_map[leg3_name]
+                r4 = run_map[leg4_name]
+
+                # 4. EXPLICIT TRIGGER BUTTON TO EXECUTE PERFORMANCE KINEMATICS & SYNC STATE
+                st.write("")
+                if st.button("🎯 Calculate Relay Go Marks & Sync Export Report", use_container_width=True):
+                    
+                    # Core kinematic logic helper function 
+                    def get_go_mark(fly_val, block_val):
+                        if 'calculate_relay_go_mark' in globals():
+                            return calculate_relay_go_mark(fly_val, block_val)
+                        else:
+                            f = fly_val if fly_val != 99.0 else 2.20
+                            b = block_val if block_val != 99.0 else 4.20
+                            return int(round((b - f) * 4.5 + 17))
+
+                    # Process custom calculations based strictly on manual lineup arrangement 
+                    mark_1to2 = get_go_mark(r1['fly'], r2['block'])
+                    mark_2to3 = get_go_mark(r2['fly'], r3['block'])
+                    mark_3to4 = get_go_mark(r3['fly'], r4['block'])
+
+                    # Publish metrics across memory scope to st.session_state for Module 6 PDF parsing
+                    st.session_state.relay_go_marks = {
+                        "1to2": float(mark_1to2),
+                        "2to3": float(mark_2to3),
+                        "3to4": float(mark_3to4)
+                    }
+                    
+                    # Convert labels format elegantly to align perfectly with AD layout panels
+                    st.session_state.custom_relay_lineup = {
+                        "leg1": {"name": r1['name'], "metric": f"[Block Start: {r1['block']:.2f}s]" if r1['block'] != 99.0 else "[No Block Data]"},
+                        "leg2": {"name": r2['name'], "metric": f"[Fly Split: {r2['fly']:.2f}s]" if r2['fly'] != 99.0 else "[No Fly Data]"},
+                        "leg3": {"name": r3['name'], "metric": f"[Fly Split: {r3['fly']:.2f}s]" if r3['fly'] != 99.0 else "[No Fly Data]"},
+                        "leg4": {"name": r4['name'], "metric": f"[Anchor Fly: {r4['fly']:.2f}s]" if r4['fly'] != 99.0 else "[No Fly Data]"}
+                    }
+
+                    st.toast("🚀 Relay adjustments and calculations successfully synced to Executive AD Export Hub!", icon="🔥")
+
+                    # Display outputs immediately underneath interactive area
+                    st.write("---")
+                    st.subheader("📊 Active Exchange Zone Parameters")
+                    
+                    l1_disp = f"{r1['block']:.2f}s" if r1['block'] != 99.0 else "--"
+                    l2_disp = f"{r2['fly']:.2f}s" if r2['fly'] != 99.0 else "--"
+                    l3_disp = f"{r3['fly']:.2f}s" if r3['fly'] != 99.0 else "--"
+                    l4_disp = f"{r4['fly']:.2f}s" if r4['fly'] != 99.0 else "--"
+
+                    disp_c1, disp_c2, disp_c3, disp_c4 = st.columns(4)
+                    disp_c1.metric("Leg 1", r1['name'], f"Block: {l1_disp}")
+                    disp_c2.metric("Leg 2", r2['name'], f"Fly: {l2_disp}")
+                    disp_c3.metric("Leg 3", r3['name'], f"Fly: {l3_disp}")
+                    disp_c4.metric("Leg 4", r4['name'], f"Fly: {l4_disp}")
+
+                    st.markdown(f"""
+                    * **Exchange 1 (Leg 1 to Leg 2):** Count out exactly **{mark_1to2} footsteps** backward from the apex checkmark point.
+                    * **Exchange 2 (Leg 2 to Leg 3):** Count out exactly **{mark_2to3} footsteps** backward from the apex checkmark point.
+                    * **Exchange 3 (Leg 3 to Leg 4):** Count out exactly **{mark_3to4} footsteps** backward from the apex checkmark point.
+                    """)
         else:
             st.warning("⚠️ The active roster requires at least 4 registered athletes of this gender segment with documented sprint metrics to optimize line-up configurations.")
-
+            
 # ==========================================
 # MODULE 6: AD REPORT EXPORT ("THE AD CLOSER")
 # ==========================================
 elif app_portal == "📄 AD Report Export":
     import io
+    import pandas as pd
     from datetime import datetime
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
@@ -1037,7 +1094,7 @@ elif app_portal == "📄 AD Report Export":
         velocity_sums = 0.0
         velocity_count = 0
         
-        # Track metric pools for downstream automated relay lineup generation
+        # Track metric pools for downstream automated relay lineup generation fallback
         relay_pool = []
 
         for _, athlete in active_squad.iterrows():
@@ -1060,15 +1117,16 @@ elif app_portal == "📄 AD Report Export":
                     proj_val = float(fly_logs[fly_logs['fat'] == pr_val].iloc[0]['proj_100'])
                     
                     # Accumulate team velocity parameters (v = 20m / t)
-                    velocity_sums += (20.0 / pr_val)
-                    velocity_count += 1
+                    if pr_val > 0:
+                        velocity_sums += (20.0 / pr_val)
+                        velocity_count += 1
                 
                 # Process 30m starting block data streams
                 block_logs = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '30m_block')]
                 if not block_logs.empty:
                     best_block_val = float(block_logs['fat'].min())
 
-            # Map display strings or structural fallbacks elegantly
+            # Map display strings elegantly
             base_str = f"{baseline_val:.2f}s FAT" if baseline_val else "--"
             pr_str = f"{pr_val:.2f}s FAT" if pr_val else "--"
             
@@ -1084,7 +1142,7 @@ elif app_portal == "📄 AD Report Export":
             if is_qualifier:
                 proj_str += " *"
 
-            # Push structured data layout back to the presentation collection arrays
+            # Push structured data layout back to presentation array
             processed_roster.append({
                 "id": a_id,
                 "name": a_name,
@@ -1095,56 +1153,79 @@ elif app_portal == "📄 AD Report Export":
                 "is_qualifier": is_qualifier
             })
 
-            # Populate evaluation dict for relay lineup filtering optimization
+            # Populate evaluation dict for backup sorting
             relay_pool.append({
                 "name": a_name,
-                "best_fly": pr_val if pr_val else 99.0,
-                "best_block": best_block_val if best_block_val else 99.0
+                "best_fly": pr_val if pr_val else 2.20,
+                "best_block": best_block_val if best_block_val else 4.20
             })
 
         # Calculate high-level performance metrics summaries
         tracked_count = len(active_squad)
-        avg_improvement = f"{total_deltas / delta_count:+.2f}s" if delta_count > 0 else "+0.00s"
+        avg_improvement = f"{total_deltas / delta_count:+.2f}s" if delta_count > 0 else "0.00s"
         avg_velocity = f"{velocity_sums / velocity_count:.2f} m/s" if velocity_count > 0 else "-- m/s"
 
-        # 4. Data-Optimized Relay Selection Engine (Prevents Duplicate Runner Placement)
-        leg1_name, leg1_metric = "Vacant Slot", "[No Data]"
-        leg2_name, leg2_metric = "Vacant Slot", "[No Data]"
-        leg3_name, leg3_metric = "Vacant Slot", "[No Data]"
-        leg4_name, leg4_metric = "Vacant Slot", "[No Data]"
-        
-        # Base strategic step variables
-        step_1to2, step_2to3, step_3to4 = 19.5, 18.0, 21.0
+        # =========================================================================
+        # 4. CROSS-MODULE LINEUP INTEGRATION (READS FROM MODULE 5 OVERRIDES)
+        # =========================================================================
+        if 'custom_relay_lineup' in st.session_state and isinstance(st.session_state.custom_relay_lineup, dict):
+            # Read exact manual selections from Module 5
+            c_lineup = st.session_state.custom_relay_lineup
+            leg1_name = c_lineup['leg1']['name']
+            leg1_metric = c_lineup['leg1']['metric']
+            
+            leg2_name = c_lineup['leg2']['name']
+            leg2_metric = c_lineup['leg2']['metric']
+            
+            leg3_name = c_lineup['leg3']['name']
+            leg3_metric = c_lineup['leg3']['metric']
+            
+            leg4_name = c_lineup['leg4']['name']
+            leg4_metric = c_lineup['leg4']['metric']
+        else:
+            # Fallback Selection Engine: Auto-calculate default if Module 5 hasn't run yet
+            leg1_name, leg1_metric = "Vacant Slot", "[No Data]"
+            leg2_name, leg2_metric = "Vacant Slot", "[No Data]"
+            leg3_name, leg3_metric = "Vacant Slot", "[No Data]"
+            leg4_name, leg4_metric = "Vacant Slot", "[No Data]"
 
-        if len(relay_pool) >= 1:
-            # Sort 1: Assign the absolute fastest accelerator out of blocks to Leg 1
-            relay_pool = sorted(relay_pool, key=lambda x: x['best_block'])
-            runner = relay_pool.pop(0)
-            leg1_name = runner['name']
-            leg1_metric = f"[Fastest 30m Block Start: {runner['best_block']:.2f}s]" if runner['best_block'] < 99 else "[No Block Log]"
-            
-        if len(relay_pool) >= 1:
-            # Sort 2: From remaining runners, assign the absolute fastest top-end fly speed to Leg 2
-            relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
-            runner = relay_pool.pop(0)
-            leg2_name = runner['name']
-            leg2_metric = f"[Fastest 20m Flying Fly: {runner['best_fly']:.2f}s]" if runner['best_fly'] < 99 else "[No Fly Log]"
-            
-        if len(relay_pool) >= 1:
-            # Sort 3: Assign the next fastest top-end sprinter to Leg 4 (The Closer/Anchor)
-            relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
-            runner = relay_pool.pop(0)
-            leg4_name = runner['name']
-            leg4_metric = f"[Closer / Competitor Peak Acceleration: {runner['best_fly']:.2f}s]" if runner['best_fly'] < 99 else "[No Fly Log]"
-            
-        if len(relay_pool) >= 1:
-            # Sort 4: Place the next remaining performance profile runner into Leg 3 (The Curve Specialist)
-            runner = relay_pool.pop(0)
-            leg3_name = runner['name']
-            leg3_metric = "[Strong Speed Endurance Threshold]"
+            if len(relay_pool) >= 4:
+                # Leg 1: Block Start
+                relay_pool = sorted(relay_pool, key=lambda x: x['best_block'])
+                r1 = relay_pool.pop(0)
+                leg1_name, leg1_metric = r1['name'], f"[Block Start: {r1['best_block']:.2f}s]"
+                
+                # Leg 2: Straight Fly
+                relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
+                r2 = relay_pool.pop(0)
+                leg2_name, leg2_metric = r2['name'], f"[Fly Split: {r2['best_fly']:.2f}s]"
+                
+                # Leg 4: Anchor Closer
+                relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
+                r4 = relay_pool.pop(0)
+                leg4_name, leg4_metric = r4['name'], f"[Anchor Fly: {r4['fly']:.2f}s]"
+                
+                # Leg 3: Curve
+                relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
+                r3 = relay_pool.pop(0)
+                leg3_name, leg3_metric = r3['name'], f"[Fly Split: {r3['best_fly']:.2f}s]"
+
+        # =========================================================================
+        # CROSS-MODULE GO MARK SYNCHRONIZER
+        # =========================================================================
+        if 'relay_go_marks' in st.session_state and isinstance(st.session_state.relay_go_marks, dict):
+            # Pull direct high-precision steps computed via Module 5's action button
+            step_1to2 = st.session_state.relay_go_marks.get('1to2', 17.0)
+            step_2to3 = st.session_state.relay_go_marks.get('2to3', 17.0)
+            step_3to4 = st.session_state.relay_go_marks.get('3to4', 17.0)
+        else:
+            # Clean mathematical fallback step equations if optimizer hasn't been engaged
+            step_1to2 = 17.0
+            step_2to3 = 17.0
+            step_3to4 = 17.0
 
         # 5. ReportLab PDF Generation Definition Routine
-        def generate_ad_pdf(coach, program, squad, benchmark, roster, r1, r2, r3, r4, m1, m2, m3, m4, count, impr, vel):
+        def generate_ad_pdf(coach, program, squad, benchmark, roster, r1, r2, r3, r4, m1, m2, m3, m4, count, impr, vel, s1, s2, s3):
             buffer = io.BytesIO()
             doc = SimpleDocTemplate(
                 buffer, 
@@ -1217,7 +1298,7 @@ elif app_portal == "📄 AD Report Export":
             
             story.append(Spacer(1, 8))
             story.append(Paragraph("■ <b>RECOMMENDED RELAY GO MARKS:</b>", section_style))
-            story.append(Paragraph(f"- Exch 1 (1 to 2): {step_1to2:.1f} Steps &nbsp;|&nbsp; Exch 2 (2 to 3): {step_2to3:.1f} Steps &nbsp;|&nbsp; Exch 3 (3 to 4): {step_3to4:.1f} Steps", bullet_style))
+            story.append(Paragraph(f"- Exch 1 (1 to 2): {s1:.1f} Steps &nbsp;|&nbsp; Exch 2 (2 to 3): {s2:.1f} Steps &nbsp;|&nbsp; Exch 3 (3 to 4): {s3:.1f} Steps", bullet_style))
             
             story.append(Spacer(1, 40))
             story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#999999"), spaceBefore=10, spaceAfter=10))
@@ -1228,11 +1309,11 @@ elif app_portal == "📄 AD Report Export":
             buffer.seek(0)
             return buffer
 
-        # Pre-build compiled download asset
+        # Pre-build compiled download asset with dynamic steps passed through
         pdf_data = generate_ad_pdf(
             coach_name, program_name, squad_division, state_qual_time, processed_roster,
             leg1_name, leg2_name, leg3_name, leg4_name, leg1_metric, leg2_metric, leg3_metric, leg4_metric,
-            tracked_count, avg_improvement, avg_velocity
+            tracked_count, avg_improvement, avg_velocity, step_1to2, step_2to3, step_3to4
         )
 
         # 6. Streamlit Document UI Container Preview Panel Rendering
@@ -1249,7 +1330,6 @@ elif app_portal == "📄 AD Report Export":
             
             st.markdown("### ■ PERFORMANCE ROSTER & 100M PROJECTED RANKINGS")
             
-            # Map clean layout formatting dictionary array to pass inside standard dataframe component safely
             ui_table_data = []
             for item in processed_roster:
                 ui_table_data.append({
@@ -1273,6 +1353,7 @@ elif app_portal == "📄 AD Report Export":
             st.write("")
             
             st.markdown("### ■ RECOMMENDED RELAY GO MARKS:")
+            # Display step indicators as dynamic whole or float indicators depending on math calculations
             st.markdown(f"- Exch 1 (1 to 2): **{step_1to2:.1f} Steps** | Exch 2 (2 to 3): **{step_2to3:.1f} Steps** | Exch 3 (3 to 4): **{step_3to4:.1f} Steps**")
             st.write("---")
             
