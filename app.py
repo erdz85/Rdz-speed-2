@@ -403,7 +403,6 @@ elif app_portal == "⏱️ Workout Tracker":  # Integrates directly into your tr
             block_prs = {}
 
         # 4. Matrix Column Headers Layout
-        # Ratios [3, 2, 2, 3, 2] keep names and fields clean and scannable without wrapping
         h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 3, 2])
         with h1: st.markdown("🏃 **Athlete Name**")
         with h2: st.markdown("⚡ **Best Fly**")
@@ -484,7 +483,6 @@ elif app_portal == "⏱️ Workout Tracker":  # Integrates directly into your tr
                         else:
                             st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, log_entry_df], ignore_index=True)
                         
-                        # Visual notification toasts are fast and don't muddy the viewport UI layout
                         st.toast(f"✅ Saved entry of {fat_time:.2f}s for {athlete_name}!")
                         st.rerun()
 
@@ -612,7 +610,6 @@ elif app_portal == "🏆 Team Leaderboards":
                             st.warning(f"🏆 {badge_text}")
                         else:
                             st.info(f"🔥 Hot Streak")
-                            
 # ==========================================
 # MODULE 4: ATHLETE PROGRESS TRENDS
 # ==========================================
@@ -750,13 +747,18 @@ elif app_portal == "📈 Athlete Progress Trends":
                 d1_cutoff = 10.65
                 tier_string = "Elite State Tier" if est_100 < 10.90 else ("Varsity Point Scorer" if est_100 < 11.50 else "Developing Tier")
 
-            # 3. AUTOMATED CNS FATIGUE DETECTION ENGINE (Last 3 reps comparison check)
+            # 3. AUTOMATED CNS FATIGUE DETECTION ENGINE
+            # FIX: Filter by the most recent workout type to avoid comparing flys against block starts
             fatigue_triggered = False
-            if len(athlete_logs) >= 3:
-                recent_reps = athlete_logs.tail(3)[fat_col].values
-                # Check if reps are progressively climbing / slowing down significantly
-                if recent_reps[2] > (recent_reps[0] * 1.03):
-                    fatigue_triggered = True
+            if not athlete_logs.empty:
+                latest_logged_type = athlete_logs['type'].iloc[-1]
+                type_specific_logs = athlete_logs[athlete_logs['type'] == latest_logged_type]
+                
+                if len(type_specific_logs) >= 3:
+                    recent_reps = type_specific_logs.tail(3)[fat_col].values
+                    # Check if reps are progressively climbing / slowing down significantly
+                    if recent_reps[2] > (recent_reps[0] * 1.03):
+                        fatigue_triggered = True
 
             # 4. PREDICTIVE MILESTONE INDICATORS
             gap_to_d1 = est_100 - d1_cutoff
@@ -788,19 +790,16 @@ elif app_portal == "📈 Athlete Progress Trends":
 # ==========================================
 # MODULE 5: RELAY OPTIMIZER POOL & GO-MARK GENERATOR
 # ==========================================
-elif app_portal == "🤝 Relay Optimizer Pool": # Fixed routing variable to match your portal state
+elif app_portal == "🤝 Relay Optimizer Pool": 
     st.title("🏆 Data-Optimized 4x100m Relay Builder")
     st.markdown("This engine runs algorithmic sorting to map your fastest 4 available athletes into their ideal lane assignments.")
     
-    # 1. Guard Rails: Verify Core Data Structures Exist
     if 'athletes' not in st.session_state or st.session_state.athletes.empty:
         st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
     else:
-        # Standardize Roster DataFrame and enforce case-insensitivity
         roster_clean = st.session_state.athletes.copy()
         roster_clean.columns = [str(c).lower() for c in roster_clean.columns]
         
-        # EXPLICIT INACTIVE FILTER: Pull out inactive runners from pool consideration
         if 'status' in roster_clean.columns:
             roster_clean = roster_clean[roster_clean['status'].astype(str).str.lower() == 'active']
             
@@ -810,13 +809,11 @@ elif app_portal == "🤝 Relay Optimizer Pool": # Fixed routing variable to matc
 
         relay_gender = st.selectbox("Select Target Relay Division Profile:", ["Male", "Female"])
         
-        # Filter pool down by target gender selection
         if gender_key:
             division_pool = roster_clean[roster_clean[gender_key].astype(str).str.lower() == relay_gender.lower()]
         else:
             division_pool = roster_clean
 
-        # 2. Compile Active Metrics Securely
         roster_metrics = []
         
         if 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty:
@@ -829,7 +826,6 @@ elif app_portal == "🤝 Relay Optimizer Pool": # Fixed routing variable to matc
             for _, athlete in division_pool.iterrows():
                 ath_id = str(athlete[id_key]).strip()
                 
-                # Filter individual best marks
                 b_fly = logs_clean[(logs_clean['athlete_id'].astype(str).str.strip() == ath_id) & (logs_clean[type_col] == "20m_fly")][fat_col].min()
                 b_block = logs_clean[(logs_clean['athlete_id'].astype(str).str.strip() == ath_id) & (logs_clean[type_col] == "30m_block")][fat_col].min()
                 
@@ -841,32 +837,30 @@ elif app_portal == "🤝 Relay Optimizer Pool": # Fixed routing variable to matc
                         "block": float(b_block) if pd.notna(b_block) else 99.0
                     })
 
-        # 3. Execution Sorting Architecture
         if len(roster_metrics) >= 4:
             rdf = pd.DataFrame(roster_metrics)
             
-            # Leg 1: Block Start Specialist (Lowest 30m block start time value)
+            # Leg 1: Block Start Specialist 
             leg1_runner = rdf.sort_values('block').iloc[0]
             rdf = rdf[rdf['id'] != leg1_runner['id']]
             
-            # Leg 2: Direct Straight-Away Flyer (Lowest 20m fly time value remaining)
+            # Leg 2: Direct Straight-Away Flyer
             leg2_runner = rdf.sort_values('fly').iloc[0]
             rdf = rdf[rdf['id'] != leg2_runner['id']]
             
-            # Leg 4: The Anchor Closer (Fastest remaining top end max velocity)
+            # Leg 4: The Anchor Closer
             leg4_runner = rdf.sort_values('fly').iloc[0]
             rdf = rdf[rdf['id'] != leg4_runner['id']]
             
-            # Leg 3: Curve Transition Master (Next fastest available matrix element)
+            # FIX: Sort the remaining dataframe before picking the Leg 3 Curve Specialist
+            rdf = rdf.sort_values('fly')
             leg3_runner = rdf.iloc[0]
             
-            # Format clean display times (hiding placeholder 99.0 entries visually)
             l1_b = f"{leg1_runner['block']:.2f}s" if leg1_runner['block'] != 99.0 else "--"
             l2_f = f"{leg2_runner['fly']:.2f}s" if leg2_runner['fly'] != 99.0 else "--"
             l3_f = f"{leg3_runner['fly']:.2f}s" if leg3_runner['fly'] != 99.0 else "--"
             l4_f = f"{leg4_runner['fly']:.2f}s" if leg4_runner['fly'] != 99.0 else "--"
 
-            # Display assignments onto dashboard metrics card containers
             st.subheader("⚡ Core Relay Pool Roster Selection Matrix")
             c1, c2, c3, c4 = st.columns(4)
             with c1:
@@ -878,16 +872,13 @@ elif app_portal == "🤝 Relay Optimizer Pool": # Fixed routing variable to matc
             with c4:
                 st.metric("🏃‍♂️ Leg 4 (Anchor Closer)", leg4_runner['name'], f"Fly: {l4_f}")
             
-            # 4. Automatically compute exchange acceleration zone mark patterns
             st.write("---")
             st.subheader("🎯 AUTOMATED EXCHANGE ZONE MARK STEPS")
             
-            # Local mathematical fallback solver rules if function scope is unassigned
             def get_go_mark(fly_val, block_val):
                 if 'calculate_relay_go_mark' in globals():
                     return calculate_relay_go_mark(fly_val, block_val)
                 else:
-                    # Clean traditional kinematically scaled rule-of-thumb stride formula fallback
                     f = fly_val if fly_val != 99.0 else 2.20
                     b = block_val if block_val != 99.0 else 4.20
                     return int(round((b - f) * 4.5 + 17))
@@ -909,6 +900,7 @@ elif app_portal == "🤝 Relay Optimizer Pool": # Fixed routing variable to matc
 # ==========================================
 elif app_portal == "📄 AD Report Export":
     import io
+    from datetime import datetime  # FIX: Added missing import to resolve NameError
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
@@ -920,7 +912,6 @@ elif app_portal == "📄 AD Report Export":
     
     st.info("💡 **Print-Optimized Formatting:** This engine builds a high-contrast, monochrome PDF designed perfectly for standard office printers, bulletin boards, and athletic department budget reviews.")
 
-    # 1. Parameter Adjustments for Report Header
     col1, col2 = st.columns(2)
     with col1:
         coach_name = st.text_input("Head Coach Name:", value="John Doe")
@@ -931,7 +922,6 @@ elif app_portal == "📄 AD Report Export":
 
     st.write("---")
 
-    # --- PDF GENERATOR ENGINE FUNCTION ---
     def generate_ad_pdf(coach, program, squad, benchmark):
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(
@@ -964,21 +954,18 @@ elif app_portal == "📄 AD Report Export":
 
         story = []
 
-        # Header Module Block
         story.append(Paragraph(f"■ {program.upper()} — 2026 SEASON SPEED REPORT", title_style))
         current_date = datetime.today().strftime('%B %d, %Y')
         story.append(Paragraph(f"Report Generated: {current_date} &nbsp;|&nbsp; Head Coach: {coach}", meta_style))
         story.append(Spacer(1, 10))
         story.append(HRFlowable(width="100%", thickness=1.5, color=colors.black, spaceBefore=1, spaceAfter=15))
 
-        # Squad Performance KPI Summary
         story.append(Paragraph(f"[ SQUAD OVERVIEW: {squad} ]", section_style))
         story.append(Paragraph("• Total Active Student-Athletes Tracked: <b>7</b>", bullet_style))
         story.append(Paragraph("• Avg. 20m Fly Block Performance Improvement: <b>-0.18s</b>", bullet_style))
         story.append(Paragraph("• Team Speed Peak Velocity Aggregate: <b>9.85 m/s (Average)</b>", bullet_style))
         story.append(Spacer(1, 15))
 
-        # Roster Performance Table Box
         story.append(Paragraph("■ PERFORMANCE ROSTER & 100M PROJECTED RANKINGS", section_style))
         
         table_data = [
@@ -1003,7 +990,6 @@ elif app_portal == "📄 AD Report Export":
         story.append(Paragraph(f"<i>* Denotes State Qualifying standard projected ({benchmark:.2f}s)</i>", meta_style))
         story.append(Spacer(1, 15))
 
-        # Relay Construction Board
         story.append(Paragraph("■ PROPOSED 4x100M RELAY LINEUP (DATA-OPTIMIZED)", section_style))
         story.append(Paragraph("• <b>Leg 1 (Starter):</b> Jordan Davis &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[Fastest 30m Block Start: 4.10s]", bullet_style))
         story.append(Paragraph("• <b>Leg 2 (Straight):</b> Marcus Anderson [Fastest 20m Flying Fly: 1.98s]", bullet_style))
@@ -1014,7 +1000,6 @@ elif app_portal == "📄 AD Report Export":
         story.append(Paragraph("■ <b>RECOMMENDED RELAY GO MARKS:</b>", section_style))
         story.append(Paragraph("- Exch 1 (1 to 2): 19.5 Steps &nbsp;|&nbsp; Exch 2 (2 to 3): 18.0 Steps &nbsp;|&nbsp; Exch 3 (3 to 4): 21.0 Steps", bullet_style))
         
-        # Verification System Signature Block
         story.append(Spacer(1, 40))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#999999"), spaceBefore=10, spaceAfter=10))
         story.append(Paragraph("<b>Verified By:</b> RDZ Speed Intelligence System Dashboard", meta_style))
@@ -1024,10 +1009,8 @@ elif app_portal == "📄 AD Report Export":
         buffer.seek(0)
         return buffer
 
-    # --- STREAMLIT CONTROL ACTION ---
     pdf_data = generate_ad_pdf(coach_name, program_name, squad_division, state_qual_time)
 
-    # Rendering Clean On-Screen Live Report UI Preview
     st.markdown("### 📋 Document Preview Panel")
     with st.container(border=True):
         st.markdown(f"### ■ {program_name.upper()} — 2026 SEASON SPEED REPORT")
@@ -1060,7 +1043,6 @@ elif app_portal == "📄 AD Report Export":
         st.caption("**Verified By:** RDZ Speed Intelligence System Dashboard")
         st.caption("*This document contains certified high-precision metrics compiled for athletic recruitment evaluation and administrative review.*")
 
-    # Floating One-Tap Export Downloader Row
     st.write("")
     st.download_button(
         label="📄 Generate & Download Coach's Report",
@@ -1069,7 +1051,7 @@ elif app_portal == "📄 AD Report Export":
         mime="application/pdf",
         use_container_width=True
     )
-    
+
 # ==========================================
 # MODULE: WORKOUT TRACKER
 # ==========================================
@@ -1288,3 +1270,6 @@ elif app_portal == "📆 Live Session Dashboard":
                 with r3: st.markdown(f"<span style='color:#00E676;'>{block_str}</span>", unsafe_allow_html=True)
                 with r4: st.markdown(f"<span style='color:#00B0FF;'>{proj_str}</span>", unsafe_allow_html=True)
                 st.write("---")
+
+
+
