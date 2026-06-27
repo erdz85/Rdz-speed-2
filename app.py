@@ -616,7 +616,7 @@ elif app_portal == "⏱️ Workout Tracker":  # Integrates directly into your tr
                         st.rerun()
 
 # ==========================================
-# MODULE 3: TEAM LEADERBOARDS
+# MODULE 3: TEAM LEADERBOARDS (UPDATED)
 # ==========================================
 elif app_portal == "🏆 Team Leaderboards":
     st.title("🔥 Team Leaderboards (The Engagement Engine)")
@@ -625,6 +625,9 @@ elif app_portal == "🏆 Team Leaderboards":
     if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
         st.warning("⚠️ No workout log data found to generate leaderboards.")
     else:
+        import pandas as pd
+        import math
+        
         logs = st.session_state.workout_logs.copy()
         logs.columns = [str(c).lower() for c in logs.columns]
         
@@ -692,10 +695,15 @@ elif app_portal == "🏆 Team Leaderboards":
             suffix = "s FAT"
             badge_text = "Power Start"
             
-        else: # Projected 100m calculation
+        else: # Projected 100m precision matrix grouping
             st.subheader("⏱️ Projected 100m Dash Leaderboard")
-            metric_df = logs[logs[type_col] == '20m_fly'].groupby('athlete_id')[fat_col].min().reset_index()
-            metric_df[fat_col] = (metric_df[fat_col] * 5.0) + 1.25
+            # Isolate all-time best markers for both profiles independently
+            fly_bests = logs[logs[type_col] == '20m_fly'].groupby('athlete_id')[fat_col].min().reset_index().rename(columns={fat_col: 'best_fly'})
+            block_bests = logs[logs[type_col] == '30m_block'].groupby('athlete_id')[fat_col].min().reset_index().rename(columns={fat_col: 'best_block'})
+            
+            # Combine profiles cleanly using an outer join
+            metric_df = pd.merge(fly_bests, block_bests, on='athlete_id', how='outer')
+            metric_df[fat_col] = None # Placeholder to satisfy downstream sort structures
             suffix = "s (Est)"
             badge_text = "Projected"
 
@@ -704,6 +712,47 @@ elif app_portal == "🏆 Team Leaderboards":
 
         # Merge calculated logs with roster rows
         leaderboard_df = roster.merge(metric_df, left_on='id', right_on='athlete_id', how='inner')
+
+        # --- SYNCED INTEGRATION LAYER FOR 100M DYNAMIC PROJECTIONS ---
+        if "Projected 100m" in leaderboard_type:
+            computed_projections = []
+            for _, row in leaderboard_df.iterrows():
+                a_gender = str(row.get('gender', 'male')).lower().strip()
+                f_val = row.get('best_fly', None)
+                b_val = row.get('best_block', None)
+                
+                # Convert potential NaN elements to native Python None types
+                if pd.isna(f_val): f_val = None
+                if pd.isna(b_val): b_val = None
+                
+                if 'calculate_precise_100m' in globals():
+                    proj_val = calculate_precise_100m(thirty_block=b_val, twenty_fly=f_val, gender=a_gender)
+                    
+                    # Direct manual fallback if they completely lack 20m fly tracking records
+                    if proj_val is None and b_val is not None:
+                        gender_const = 1.17 if 'female' in a_gender else 1.15
+                        proj_val = round((b_val * 2.5) + gender_const, 2)
+                else:
+                    # Mathematical local fallback structure matching updated formulas
+                    if f_val is not None:
+                        if b_val is not None:
+                            proj_val = round(b_val + (f_val * 3.5), 2)
+                        else:
+                            gender_const = 1.17 if 'female' in a_gender else 1.15
+                            proj_val = round((f_val * 5.0) + gender_const, 2)
+                    elif b_val is not None:
+                        gender_const = 1.17 if 'female' in a_gender else 1.15
+                        proj_val = round((b_val * 2.5) + gender_const, 2)
+                    else:
+                        proj_val = None
+                        
+                computed_projections.append(proj_val)
+            
+            leaderboard_df[fat_col] = computed_projections
+            # Cleanly drop ghost rows that have zero records on file
+            leaderboard_df = leaderboard_df.dropna(subset=[fat_col])
+
+        # Execute final leaderboard hierarchy sort
         leaderboard_df = leaderboard_df.sort_values(by=fat_col, ascending=True).reset_index(drop=True)
 
         # --- UI DISPLAY RENDERING LOOP ---
@@ -720,7 +769,6 @@ elif app_portal == "🏆 Team Leaderboards":
                 grade_tag = f"• Grade {row['grade']}" if 'grade' in row and pd.notna(row['grade']) else ""
                 
                 # Double safety numeric check to block NaN output rendering completely
-                import math
                 val = row[fat_col]
                 if pd.isna(val) or math.isnan(val):
                     display_time = "--"
@@ -740,7 +788,7 @@ elif app_portal == "🏆 Team Leaderboards":
                         else:
                             st.info(f"🔥 Hot Streak")
 # ==========================================
-# MODULE 4: ATHLETE PROGRESS TRENDS
+# MODULE 4: ATHLETE PROGRESS TRENDS (AUDITED)
 # ==========================================
 elif app_portal == "📈 Athlete Progress Trends":
     st.title("📈 The Athlete Progress Screen (Analytical Deep Dive)")
@@ -784,13 +832,14 @@ elif app_portal == "📈 Athlete Progress Trends":
         athlete_logs['date'] = pd.to_datetime(athlete_logs['date'])
         athlete_logs = athlete_logs.sort_values(by='date')
 
-        fat_col = 'fat' if 'fat' in athlete_logs.columns else athlete_logs.columns[-2]
+        # Robustly target performance time column
+        fat_col = 'fat' if 'fat' in athlete_logs.columns else ('time' if 'time' in athlete_logs.columns else athlete_logs.columns[-2])
         athlete_logs[fat_col] = pd.to_numeric(athlete_logs[fat_col], errors='coerce')
 
         # --- UI PROFILE HEADER CONTAINER ---
         st.write("")
         grade_str = f"• Grade {athlete_meta['grade']}" if 'grade' in athlete_meta and pd.notna(athlete_meta['grade']) else ""
-        group_str = f"• {athlete_meta['group']}" if 'group' in athlete_meta and pd.notna(athlete_meta['group']) else "Short Sprinters"
+        group_str = f"• {athlete_meta['group']}" if 'group' in athlete_meta and pd.notna(athlete_meta['group']) else "• Short Sprinters"
         gender_val = str(athlete_meta[gender_key]).lower() if gender_key and pd.notna(athlete_meta[gender_key]) else 'male'
         
         with st.container(border=True):
@@ -801,7 +850,7 @@ elif app_portal == "📈 Athlete Progress Trends":
         st.write("")
         chart_view = st.radio(
             label="Select Analytical Tracking Dimension:",
-            options=["⚡ 20m Fly Trend", "🧱 30m Block Trend", "⏱️ 100m, 200m & 400m Projection Forecasts"],
+            options=["⚡ 20m Fly Trend", "🧱 30m Block Trend", "⏱️ Recruitment Projections"],
             horizontal=True
         )
 
@@ -811,7 +860,6 @@ elif app_portal == "📈 Athlete Progress Trends":
             if fly_data.empty:
                 st.info(f"ℹ️ No 20m Fly repetitions logged on file for {selected_athlete_name}.")
             else:
-                # Group by date to show clean progression timeline
                 fly_timeline = fly_data.groupby('date')[fat_col].min()
                 st.subheader("📈 20m Fly Progression Timeline")
                 st.line_chart(fly_timeline)
@@ -825,28 +873,59 @@ elif app_portal == "📈 Athlete Progress Trends":
                 st.subheader("📈 30m Block Start Progression Timeline")
                 st.line_chart(block_timeline)
                 
-        else: # 100m, 200m & 400m Dash Projections Line Graph
+        else:
             fly_logs = athlete_logs[athlete_logs['type'] == '20m_fly'].copy()
             if fly_logs.empty:
                 st.info("ℹ️ Projections line graph requires historical 20m Fly data entries.")
             else:
                 st.subheader("⏱️ Multi-Event Dash Recruitment Projections Forecast")
                 
-                # Dynamic generation of 100/200/400 curves based on best fly points over time
                 proj_timeline = fly_logs.groupby('date')[fat_col].min().reset_index()
                 
-                # Apply gender specific velocity-decay multiplication modeling factors
+                # --- SYNCED TIMELINE PROJECTION LOOP ---
+                # Run each timeline date through your precise calculation engine
+                proj_100_list = []
+                for _, p_row in proj_timeline.iterrows():
+                    d_date = p_row['date']
+                    f_val = p_row[fat_col]
+                    
+                    # Look for a block effort run on this exact same training day to increase accuracy
+                    b_day = athlete_logs[(athlete_logs['date'] == d_date) & (athlete_logs['type'] == '30m_block')][fat_col]
+                    b_val = b_day.min() if not b_day.empty else None
+                    
+                    if pd.isna(b_val): b_val = None
+                    
+                    if 'calculate_precise_100m' in globals():
+                        p_val = calculate_precise_100m(thirty_block=b_val, twenty_fly=f_val, gender=gender_val)
+                        if p_val is None:
+                            gender_const = 1.17 if 'female' in gender_val else 1.15
+                            p_val = round((f_val * 5.0) + gender_const, 2)
+                    else:
+                        gender_const = 1.17 if 'female' in gender_val else 1.15
+                        p_val = round((f_val * 5.0) + gender_const, 2)
+                    proj_100_list.append(p_val)
+                
+                proj_timeline['100m Proj'] = proj_100_list
+                
+                # Apply synchronized endurance decay models to the updated 100m baseline
                 if 'female' in gender_val:
-                    proj_timeline['100m Proj'] = (proj_timeline[fat_col] * 5.10) + 1.40
                     proj_timeline['200m Proj'] = proj_timeline['100m Proj'] * 2.05
                     proj_timeline['400m Proj'] = proj_timeline['100m Proj'] * 4.65
                 else:
-                    proj_timeline['100m Proj'] = (proj_timeline[fat_col] * 4.95) + 1.20
                     proj_timeline['200m Proj'] = proj_timeline['100m Proj'] * 1.98
                     proj_timeline['400m Proj'] = proj_timeline['100m Proj'] * 4.40
                 
-                chart_df = proj_timeline.set_index('date')[['100m Proj', '200m Proj', '400m Proj']]
-                st.line_chart(chart_df)
+                selected_events = st.multiselect(
+                    "Filter chart events to maintain high visual resolution:",
+                    options=['100m Proj', '200m Proj', '400m Proj'],
+                    default=['100m Proj']
+                )
+                
+                if selected_events:
+                    chart_df = proj_timeline.set_index('date')[selected_events]
+                    st.line_chart(chart_df)
+                else:
+                    st.caption("Select at least one distance milestone above to view the tracking graph.")
 
         # --- INSIGHTS ENGINE: COGNITIVE BIO-ANALYTICS ---
         st.write("---")
@@ -858,66 +937,77 @@ elif app_portal == "📈 Athlete Progress Trends":
             # 1. Compute Total Improvement
             first_rep = athlete_logs[fat_col].iloc[0]
             best_rep = athlete_logs[fat_col].min()
-            total_diff = best_rep - first_rep
+            total_diff = first_rep - best_rep
             
-            # 2. Get baseline metrics for metrics calculation rules
+            # 2. Get baseline metrics using explicit safe NaN handling
             best_fly_all_time = athlete_logs[athlete_logs['type'] == '20m_fly'][fat_col].min()
             best_block_all_time = athlete_logs[athlete_logs['type'] == '30m_block'][fat_col].min()
             
-            # Generate stable contextual projection variables
-            calc_fly = best_fly_all_time if pd.notna(best_fly_all_time) else (best_block_all_time / 1.95 if pd.notna(best_block_all_time) else 2.20)
+            if pd.isna(best_fly_all_time): best_fly_all_time = None
+            if pd.isna(best_block_all_time): best_block_all_time = None
             
+            # --- INSIGHT ENGINE CORE INTEGRATION ---
+            if 'calculate_precise_100m' in globals():
+                est_100 = calculate_precise_100m(thirty_block=best_block_all_time, twenty_fly=best_fly_all_time, gender=gender_val)
+                if est_100 is None:
+                    calc_fly = best_fly_all_time if best_fly_all_time else (best_block_all_time / 1.95 if best_block_all_time else 2.20)
+                    gender_const = 1.17 if 'female' in gender_val else 1.15
+                    est_100 = round((calc_fly * 5.0) + gender_const, 2)
+            else:
+                calc_fly = best_fly_all_time if best_fly_all_time else (best_block_all_time / 1.95 if best_block_all_time else 2.20)
+                gender_const = 1.17 if 'female' in gender_val else 1.15
+                est_100 = round((calc_fly * 5.0) + gender_const, 2)
+            
+            # Set recruitment tier thresholds based on synchronized calculation output
             if 'female' in gender_val:
-                est_100 = (calc_fly * 5.10) + 1.40
                 d1_cutoff = 11.85
                 tier_string = "State Finalist Tier" if est_100 < 12.20 else ("Varsity Standard" if est_100 < 12.90 else "Developing Tier")
             else:
-                est_100 = (calc_fly * 4.95) + 1.20
                 d1_cutoff = 10.65
                 tier_string = "Elite State Tier" if est_100 < 10.90 else ("Varsity Point Scorer" if est_100 < 11.50 else "Developing Tier")
 
             # 3. AUTOMATED CNS FATIGUE DETECTION ENGINE
-            # FIX: Filter by the most recent workout type to avoid comparing flys against block starts
             fatigue_triggered = False
-            if not athlete_logs.empty:
-                latest_logged_type = athlete_logs['type'].iloc[-1]
-                type_specific_logs = athlete_logs[athlete_logs['type'] == latest_logged_type]
-                
-                if len(type_specific_logs) >= 3:
-                    recent_reps = type_specific_logs.tail(3)[fat_col].values
-                    # Check if reps are progressively climbing / slowing down significantly
-                    if recent_reps[2] > (recent_reps[0] * 1.03):
-                        fatigue_triggered = True
+            latest_logged_type = athlete_logs['type'].iloc[-1]
+            type_specific_logs = athlete_logs[athlete_logs['type'] == latest_logged_type]
+            
+            if len(type_specific_logs) >= 3:
+                recent_reps = type_specific_logs.tail(3)[fat_col].values
+                if recent_reps[2] > (recent_reps[0] * 1.03):
+                    fatigue_triggered = True
 
             # 4. PREDICTIVE MILESTONE INDICATORS
             gap_to_d1 = est_100 - d1_cutoff
 
-            # --- RENDER SUMMARY ROW CARDS INSIGHTS MATRIX ---
+            # --- RENDER SUMMARY ROW USING NATIVE STREAMLIT METRICS ---
+            m_col1, m_col2, m_col3 = st.columns(3)
+            with m_col1:
+                st.metric(label="Total Season Cut", value=f"{total_diff:.2f}s", help="Difference between initial test baseline and personal record.")
+            with m_col2:
+                st.metric(label="Est. 100m FAT", value=f"{est_100:.2f}s", delta=tier_string, delta_color="off")
+            with m_col3:
+                if gap_to_d1 > 0:
+                    st.metric(label="Gap to D1 Standard", value=f"+{gap_to_d1:.2f}s", delta="Targeting 10.65s" if 'male' in gender_val else "Targeting 11.85s", delta_color="inverse")
+                else:
+                    st.metric(label="Gap to D1 Standard", value="Met ✓", delta="Elite Tier Profile", delta_color="normal")
+            
+            st.write("")
             i_col1, i_col2 = st.columns(2)
             with i_col1:
-                st.markdown(f"• **Total Improvement:** `{total_diff:.2f}s` since initial baseline testing entry.")
-                st.markdown(f"• **Projected 100m FAT:** `{est_100:.2f} seconds` ({tier_string})")
-                
-                if gap_to_d1 > 0:
-                    st.markdown(f"🎯 **Milestone Tracker:** You are `{gap_to_d1:.2f}s` away from entering the **NCAA D1 Recruitment Standard** limit baseline.")
+                st.markdown("### 🏃‍♂️ Tactical Assignments")
+                if best_fly_all_time and (best_block_all_time is None or best_fly_all_time < 2.10):
+                    st.info("💡 **Optimal Relay Leg:** `Leg 2 or Leg 4` \n\nMax Velocity Acceleration Specialist Profile. Fits long straightaways where maintaining top-end elastic speed is critical.")
                 else:
-                    st.markdown("🎯 **Milestone Tracker:** 🎉 Performance markers match **NCAA D1 Elite Recruiting Metrics Profile thresholds**.")
+                    st.info("💡 **Optimal Relay Leg:** `Leg 1 or Leg 3` \n\nElite Curve Acceleration Block Profile. Excels at generating aggressive torque out of the blocks or sustaining hard momentum through the corner.")
             
             with i_col2:
-                # Suggest tactical relay assignments based on strengths
-                if best_fly_all_time and (best_block_all_time is None or best_fly_all_time < 2.10):
-                    st.markdown("• **Optimal Relay Leg:** `Leg 2 or Leg 4` (Max Velocity Acceleration Specialist Profile)")
-                else:
-                    st.markdown("• **Optimal Relay Leg:** `Leg 1 or Leg 3` (Elite Curve Acceleration Block Profile)")
-                
-                # Render Fatigue Warning Badges
+                st.markdown("### 🧠 Neuromuscular Safety Status")
                 if fatigue_triggered:
-                    st.warning("⚠️ **CNS Fatigue Warning:** Performance velocity has dropped >3% over consecutive reps. High hamstring risk detected. **Coaching Guidance: Pull from active max-effort drilling, require rest.**")
+                    st.warning("⚠️ **CNS Fatigue Warning:** Performance velocity has dropped greater than 3% over consecutive repetitions. High hamstring/soft-tissue injury risk detected. \n\n**Coaching Guidance:** Shut down active max-effort drilling immediately; prescribe low-impact recovery mechanics.")
                 else:
-                    st.success("✅ **CNS Muscle Readiness:** Central Nervous System recovery markers are green. No performance decay indicators flagged.")
-
+                    st.success("✅ **CNS Muscle Readiness:** Central Nervous System recovery markers are green. No significant performance decay indicators flagged. Athlete cleared for high-intensity neuromuscular output.")
 # ==========================================
-# MODULE 5: RELAY OPTIMIZER POOL & GO-MARK GENERATOR
+# MODULE 5: RELAY OPTIMIZER POOL & GO-MARK GENERATOR (AUDITED)
 # ==========================================
 elif app_portal == "🤝 Relay Optimizer Pool": 
     st.title("🏆 Data-Optimized 4x100m Relay Builder")
@@ -949,7 +1039,7 @@ elif app_portal == "🤝 Relay Optimizer Pool":
             logs_clean = st.session_state.workout_logs.copy()
             logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
             
-            fat_col = 'fat' if 'fat' in logs_clean.columns else ('raw' if 'raw' in logs_clean.columns else logs_clean.columns[-1])
+            fat_col = 'fat' if 'fat' in logs_clean.columns else ('time' if 'time' in logs_clean.columns else logs_clean.columns[-2])
             type_col = 'type' if 'type' in logs_clean.columns else ('session_type' if 'session_type' in logs_clean.columns else None)
             
             for _, athlete in division_pool.iterrows():
@@ -969,21 +1059,21 @@ elif app_portal == "🤝 Relay Optimizer Pool":
         if len(roster_metrics) >= 4:
             rdf_suggest = pd.DataFrame(roster_metrics)
             
-            # 1. RUN AUTOMATED SEEDING SELECTION ALGORITHM (To establish base index settings)
-            # Leg 1: Block Start Specialist 
-            s_leg1 = rdf_suggest.sort_values('block').iloc[0]
+            # 1. RUN AUTOMATED SEEDING SELECTION ALGORITHM
+            # Leg 1: Block Start Specialist
+            s_leg1 = rdf_suggest.sort_values(by=['block', 'id']).iloc[0]
             rdf_suggest = rdf_suggest[rdf_suggest['id'] != s_leg1['id']]
             
             # Leg 2: Direct Straight-Away Flyer
-            s_leg2 = rdf_suggest.sort_values('fly').iloc[0]
+            s_leg2 = rdf_suggest.sort_values(by=['fly', 'id']).iloc[0]
             rdf_suggest = rdf_suggest[rdf_suggest['id'] != s_leg2['id']]
             
             # Leg 4: The Anchor Closer
-            s_leg4 = rdf_suggest.sort_values('fly').iloc[0]
+            s_leg4 = rdf_suggest.sort_values(by=['fly', 'id']).iloc[0]
             rdf_suggest = rdf_suggest[rdf_suggest['id'] != s_leg4['id']]
             
             # Leg 3: Curve Specialist
-            rdf_suggest = rdf_suggest.sort_values('fly')
+            rdf_suggest = rdf_suggest.sort_values(by=['fly', 'id'])
             s_leg3 = rdf_suggest.iloc[0]
 
             # 2. BUILD INTERACTIVE MANUAL OVERRIDE UI Dropdowns
@@ -991,7 +1081,6 @@ elif app_portal == "🤝 Relay Optimizer Pool":
             st.subheader("🛠️ Interactive Lineup Customization")
             st.caption("The system has pre-selected runners based on top performance metrics. Use the dropdown entries to tweak your final lane assignments.")
 
-            # Map selection list array exclusively from tracked candidates
             available_names = [str(item['name']) for item in roster_metrics]
             
             c1, c2, c3, c4 = st.columns(4)
@@ -1015,67 +1104,69 @@ elif app_portal == "🤝 Relay Optimizer Pool":
             else:
                 st.success("✅ **Lineup Validated:** Athlete allocation contains no overlaps.")
                 
-                # Isolate specific metric dictionaries linked to the selected roster selections
+                # Isolate target dictionaries matching selections
                 run_map = {item['name']: item for item in roster_metrics}
                 r1 = run_map[leg1_name]
                 r2 = run_map[leg2_name]
                 r3 = run_map[leg3_name]
                 r4 = run_map[leg4_name]
 
-                # 4. EXPLICIT TRIGGER BUTTON TO EXECUTE PERFORMANCE KINEMATICS & SYNC STATE
+                # Kinematic calculation helper synchronized with core precise math logic
+                def get_go_mark(incoming_fly, outgoing_block):
+                    if 'calculate_relay_go_mark' in globals():
+                        return calculate_relay_go_mark(incoming_fly, outgoing_block)
+                    else:
+                        # Standardized fallback if global logic block isn't loaded
+                        f = incoming_fly if incoming_fly != 99.0 else 2.20
+                        b = outgoing_block if outgoing_block != 99.0 else 4.20
+                        return int(round((b - f) * 4.4 + 16.5))
+
+                # --- PERSISTENT CALCULATION PERSISTENCE ENGINE ---
+                # Calculations run live on every UI element redraw
+                mark_1to2 = get_go_mark(r1['fly'], r2['block'])
+                mark_2to3 = get_go_mark(r2['fly'], r3['block'])
+                mark_3to4 = get_go_mark(r3['fly'], r4['block'])
+
+                # Keep backend data frameworks perfectly updated in state memory
+                st.session_state.relay_go_marks = {
+                    "1to2": float(mark_1to2),
+                    "2to3": float(mark_2to3),
+                    "3to4": float(mark_3to4)
+                }
+                
+                st.session_state.custom_relay_lineup = {
+                    "leg1": {"name": r1['name'], "metric": f"[Block Start: {r1['block']:.2f}s]" if r1['block'] != 99.0 else "[No Block Data]"},
+                    "leg2": {"name": r2['name'], "metric": f"[Fly Split: {r2['fly']:.2f}s]" if r2['fly'] != 99.0 else "[No Fly Data]"},
+                    "leg3": {"name": r3['name'], "metric": f"[Fly Split: {r3['fly']:.2f}s]" if r3['fly'] != 99.0 else "[No Fly Data]"},
+                    "leg4": {"name": r4['name'], "metric": f"[Anchor Fly: {r4['fly']:.2f}s]" if r4['fly'] != 99.0 else "[No Fly Data]"}
+                }
+
+                # Trigger Sync Notification Action Button separately
                 st.write("")
-                if st.button("🎯 Calculate Relay Go Marks & Sync Export Report", use_container_width=True):
-                    
-                    # Core kinematic logic helper function 
-                    def get_go_mark(fly_val, block_val):
-                        if 'calculate_relay_go_mark' in globals():
-                            return calculate_relay_go_mark(fly_val, block_val)
-                        else:
-                            f = fly_val if fly_val != 99.0 else 2.20
-                            b = block_val if block_val != 99.0 else 4.20
-                            return int(round((b - f) * 4.5 + 17))
+                if st.button("💾 Lock Lineup & Dispatch to Executive AD Export Hub", use_container_width=True):
+                    st.toast(f"🚀 {relay_gender} Relay Lineup successfully dispatched to Module 6!", icon="🔥")
 
-                    # Process custom calculations based strictly on manual lineup arrangement 
-                    mark_1to2 = get_go_mark(r1['fly'], r2['block'])
-                    mark_2to3 = get_go_mark(r2['fly'], r3['block'])
-                    mark_3to4 = get_go_mark(r3['fly'], r4['block'])
+                # --- ALWAYS-RENDERED LIVE DASHBOARD RESULTS DISPLAY PANEL ---
+                st.write("---")
+                st.subheader("📊 Active Exchange Zone Parameters")
+                
+                l1_disp = f"{r1['block']:.2f}s" if r1['block'] != 99.0 else "--"
+                l2_disp = f"{r2['fly']:.2f}s" if r2['fly'] != 99.0 else "--"
+                l3_disp = f"{r3['fly']:.2f}s" if r3['fly'] != 99.0 else "--"
+                l4_disp = f"{r4['fly']:.2f}s" if r4['fly'] != 99.0 else "--"
 
-                    # Publish metrics across memory scope to st.session_state for Module 6 PDF parsing
-                    st.session_state.relay_go_marks = {
-                        "1to2": float(mark_1to2),
-                        "2to3": float(mark_2to3),
-                        "3to4": float(mark_3to4)
-                    }
-                    
-                    # Convert labels format elegantly to align perfectly with AD layout panels
-                    st.session_state.custom_relay_lineup = {
-                        "leg1": {"name": r1['name'], "metric": f"[Block Start: {r1['block']:.2f}s]" if r1['block'] != 99.0 else "[No Block Data]"},
-                        "leg2": {"name": r2['name'], "metric": f"[Fly Split: {r2['fly']:.2f}s]" if r2['fly'] != 99.0 else "[No Fly Data]"},
-                        "leg3": {"name": r3['name'], "metric": f"[Fly Split: {r3['fly']:.2f}s]" if r3['fly'] != 99.0 else "[No Fly Data]"},
-                        "leg4": {"name": r4['name'], "metric": f"[Anchor Fly: {r4['fly']:.2f}s]" if r4['fly'] != 99.0 else "[No Fly Data]"}
-                    }
+                disp_c1, disp_c2, disp_c3, disp_c4 = st.columns(4)
+                disp_c1.metric("Leg 1 (Blocks)", r1['name'], f"Start: {l1_disp}")
+                disp_c2.metric("Leg 2 (Straight)", r2['name'], f"Fly: {l2_disp}")
+                disp_c3.metric("Leg 3 (Curve)", r3['name'], f"Fly: {l3_disp}")
+                disp_c4.metric("Leg 4 (Anchor)", r4['name'], f"Fly: {l4_disp}")
 
-                    st.toast("🚀 Relay adjustments and calculations successfully synced to Executive AD Export Hub!", icon="🔥")
-
-                    # Display outputs immediately underneath interactive area
-                    st.write("---")
-                    st.subheader("📊 Active Exchange Zone Parameters")
-                    
-                    l1_disp = f"{r1['block']:.2f}s" if r1['block'] != 99.0 else "--"
-                    l2_disp = f"{r2['fly']:.2f}s" if r2['fly'] != 99.0 else "--"
-                    l3_disp = f"{r3['fly']:.2f}s" if r3['fly'] != 99.0 else "--"
-                    l4_disp = f"{r4['fly']:.2f}s" if r4['fly'] != 99.0 else "--"
-
-                    disp_c1, disp_c2, disp_c3, disp_c4 = st.columns(4)
-                    disp_c1.metric("Leg 1", r1['name'], f"Block: {l1_disp}")
-                    disp_c2.metric("Leg 2", r2['name'], f"Fly: {l2_disp}")
-                    disp_c3.metric("Leg 3", r3['name'], f"Fly: {l3_disp}")
-                    disp_c4.metric("Leg 4", r4['name'], f"Fly: {l4_disp}")
-
+                with st.container(border=True):
+                    st.markdown("### 🗺️ On-Track Acceleration Checkmark Marks")
                     st.markdown(f"""
-                    * **Exchange 1 (Leg 1 to Leg 2):** Count out exactly **{mark_1to2} footsteps** backward from the apex checkmark point.
-                    * **Exchange 2 (Leg 2 to Leg 3):** Count out exactly **{mark_2to3} footsteps** backward from the apex checkmark point.
-                    * **Exchange 3 (Leg 3 to Leg 4):** Count out exactly **{mark_3to4} footsteps** backward from the apex checkmark point.
+                    * 🏁 **Exchange 1 ({r1['name']} ➔ {r2['name']}):** Incoming runner flies; Outgoing runner sets go-mark at exactly **{mark_1to2} footsteps** backward from apex of zone.
+                    * 🏁 **Exchange 2 ({r2['name']} ➔ {r3['name']}):** Incoming runner flies; Outgoing runner sets go-mark at exactly **{mark_2to3} footsteps** backward from apex of zone.
+                    * 🏁 **Exchange 3 ({r3['name']} ➔ {r4['name']}):** Incoming runner flies; Outgoing runner sets go-mark at exactly **{mark_3to4} footsteps** backward from apex of zone.
                     """)
         else:
             st.warning("⚠️ The active roster requires at least 4 registered athletes of this gender segment with documented sprint metrics to optimize line-up configurations.")
