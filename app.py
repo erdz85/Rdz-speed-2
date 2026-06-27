@@ -126,88 +126,140 @@ app_portal = st.sidebar.radio("Go To Module Portal:", [
 
 
 # ==========================================
-# MODULE 1: ROSTER & ONBOARDING HUB (OPTION B)
+# MODULE 1: ROSTER & ONBOARDING HUB
 # ==========================================
 if app_portal == "👥 Roster & Onboarding Hub":
     st.title("👥 Roster & Onboarding Hub")
-    st.markdown("Manage your team roster database using interactive tabular spreadsheets.")
+    st.markdown("Manage your team roster, onboard new athletes, and control active training availability status.")
 
     # Initialize the athletes DataFrame if it doesn't exist in session memory
     if 'athletes' not in st.session_state:
-        st.session_state.athletes = pd.DataFrame(
-            columns=['id', 'name', 'gender', 'grade', 'group', 'tier', 'status']
-        )
+        st.session_state.athletes = pd.DataFrame(columns=['id', 'name', 'gender', 'grade', 'group', 'tier', 'status'])
 
-    # Make a copy and normalize case configurations for clean grid management mapping
-    roster_raw = st.session_state.athletes.copy()
-    roster_raw.columns = [str(c).lower() for c in roster_raw.columns]
+    # --- SECTION 1: ATHLETE ONBOARDING FORM ---
+    st.subheader("📝 Onboard New Athlete")
+    with st.form("onboarding_form", clear_on_submit=True):
+        f_col1, f_col2, f_col3 = st.columns(3)
+        with f_col1:
+            new_name = st.text_input("Full Name:")
+            new_gender = st.selectbox("Gender:", ["Male", "Female"])
+        with f_col2:
+            new_grade = st.selectbox("Grade Level:", ["9", "10", "11", "12"])
+            new_group = st.selectbox("Training Group:", ["Short Sprinters", "Hurdlers", "Long Sprinters", "Jumpers"])
+        with f_col3:
+            new_tier = st.selectbox("Roster Tier Allocation:", ["Varsity", "JV / Developing"])
+            new_status = st.selectbox("Initial Status:", ["Active", "Inactive"], help="Set initial operational availability.")
 
-    # Guard fill defaults for legacy columns missing configurations
-    if 'status' not in roster_raw.columns:
-        roster_raw['status'] = "Active"
-    if 'id' not in roster_raw.columns:
-        roster_raw['id'] = [str(i+1) for i in range(len(roster_raw))]
-
-    # Ensure clean data types inside the editing table matrix
-    roster_raw['id'] = roster_raw['id'].astype(str)
-    roster_raw['status'] = roster_raw['status'].fillna("Active").replace("", "Active")
-
-    # --- MAIN GRID SPREADSHEET EDITOR VIEW ---
-    st.subheader("📊 Interactive Team Roster Matrix")
-    st.markdown("Double-click any field below to update details instantly. Use the drop-down menu inside the status field to switch between **Active** or **Inactive** modes. To add an athlete, scroll to the bottom empty row.")
-
-    # Explicit layout schemas mapping constraints out for safe cell modifications
-    edited_df = st.data_editor(
-        roster_raw,
-        key="roster_spreadsheet_matrix",
-        use_container_width=True,
-        num_rows="dynamic",  # Enables native "➕ Add Row" and check deletion capabilities 
-        column_order=["id", "name", "gender", "grade", "group", "tier", "status"],
-        column_config={
-            "id": st.column_config.TextColumn(
-                "🔢 ID", 
-                help="System identifier code", 
-                disabled=True
-            ),
-            "name": st.column_config.TextColumn(
-                "🏃 Full Name"
-            ),
-            "gender": st.column_config.SelectboxColumn(
-                "⚧️ Gender",
-                options=["Male", "Female"]
-            ),
-            "grade": st.column_config.SelectboxColumn(
-                "🎓 Grade",
-                options=["9", "10", "11", "12"]
-            ),
-            "group": st.column_config.SelectboxColumn(
-                "🏷️ Training Group",
-                options=["Short Sprinters", "Hurdlers", "Long Sprinters", "Jumpers"]
-            ),
-            "tier": st.column_config.SelectboxColumn(
-                "🏅 Roster Tier",
-                options=["Varsity", "JV / Developing"]
-            ),
-            "status": st.column_config.SelectboxColumn(
-                "📌 Availability Status",
-                options=["Active", "Inactive"],
-                help="Inactive athletes drop from the Relay Optimizer layout instantly but remain visible on historic leaderboard tracking pages."
-            )
-        }
-    )
-
-    # --- SYNC DATA BACK TO PERMANENT MEMORY STORAGE ---
-    # Trigger state synchronization hooks if differences are generated inside grid viewcells
-    if not edited_df.equals(roster_raw):
-        # Auto-generate auto-incrementing missing strings for newly inserted grid rows
-        for idx, row in edited_df.iterrows():
-            if pd.isna(row['id']) or str(row['id']).strip() == "":
-                edited_df.at[idx, 'id'] = str(idx + 1)
+        submit_btn = st.form_submit_button("➕ Add Athlete to Roster", use_container_width=True)
         
-        # Persist data cleanly back into global session variables
-        st.session_state.athletes = edited_df
-        st.toast("💾 Roster changes auto-saved successfully!")
-        st.rerun()
+        if submit_btn:
+            if not new_name.strip():
+                st.error("⚠️ Athlete name cannot be blank.")
+            else:
+                # Dynamically evaluate the current ID tracking column safely
+                existing_roster = st.session_state.athletes.copy()
+                existing_roster.columns = [str(c).lower() for c in existing_roster.columns]
+                
+                if existing_roster.empty:
+                    new_id = "1"
+                else:
+                    id_col_name = 'id' if 'id' in existing_roster.columns else existing_roster.columns[0]
+                    try:
+                        new_id = str(int(pd.to_numeric(existing_roster[id_col_name], errors='coerce').max()) + 1)
+                    except:
+                        new_id = str(len(existing_roster) + 1)
+                
+                new_athlete = {
+                    "id": new_id,
+                    "name": new_name.strip(),
+                    "gender": new_gender,
+                    "grade": new_grade,
+                    "group": new_group,
+                    "tier": new_tier,
+                    "status": new_status
+                }
+                
+                st.session_state.athletes = pd.concat([st.session_state.athletes, pd.DataFrame([new_athlete])], ignore_index=True)
+                st.success(f"🎉 Onboarded {new_name} successfully as {new_status}!")
+                st.rerun()
+
+    st.write("---")
+
+    # --- SECTION 2: ROSTER MANAGEMENT MATRIX ---
+    st.subheader("📋 Active Roster Management Table")
+    
+    if st.session_state.athletes.empty:
+        st.info("ℹ️ No athletes currently registered on the roster.")
+    else:
+        # Clone roster and force all display columns to lowercase to prevent KeyErrors
+        m_roster = st.session_state.athletes.copy()
+        m_roster.columns = [str(c).lower() for c in m_roster.columns]
+        
+        # Smart Key Resolution backups for original frame updating
+        orig_id_col = st.session_state.athletes.columns[0]
+        for c in st.session_state.athletes.columns:
+            if str(c).lower() == 'id':
+                orig_id_col = c
+                break
+
+        # Ensure status column exists safely
+        if 'status' not in m_roster.columns:
+            st.session_state.athletes['Status'] = "Active"
+            m_roster['status'] = "Active"
+
+        # Table Header Layout Metrics
+        h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 2, 2])
+        with h1: st.markdown("🏃 **Athlete Name**")
+        with h2: st.markdown("🏷️ **Group / Tier**")
+        with h3: st.markdown("⚙️ **Availability Toggle**")
+        with h4: st.markdown("📌 **Current Status**")
+        with h5: st.markdown("❌ **Remove**")
+        st.markdown("<hr style='margin: 0px 0px 15px 0px; border-color: #555;' />", unsafe_allow_html=True)
+
+        # Dynamic management loop execution
+        for index, row in m_roster.iterrows():
+            a_id = str(row['id']).strip()
+            a_name = row.get('name', row.get('full_name', 'Unknown'))
+            a_group = row.get('group', 'Sprinters')
+            a_tier = row.get('tier', 'Varsity')
+            a_status = row.get('status', 'Active')
+            
+            c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 2, 2])
+            
+            with c1:
+                st.markdown(f"<div style='padding-top: 5px;'><b>{a_name}</b></div>", unsafe_allow_html=True)
+            with c2:
+                st.caption(f"{a_group} • {a_tier}")
+            with c3:
+                # Active/Inactive Status Switch Toggle
+                is_active = (str(a_status).lower() == "active")
+                toggle_label = "Set Inactive" if is_active else "Set Active"
+                if st.button(toggle_label, key=f"tog_{a_id}", use_container_width=True):
+                    next_status = "Inactive" if is_active else "Active"
+                    
+                    # Update target using standard vector lookups matching the base frame keys
+                    idx_match = st.session_state.athletes[st.session_state.athletes[orig_id_col].astype(str).str.strip() == a_id].index
+                    if 'status' in st.session_state.athletes.columns:
+                        st.session_state.athletes.loc[idx_match, 'status'] = next_status
+                    else:
+                        st.session_state.athletes.loc[idx_match, 'Status'] = next_status
+                        
+                    st.toast(f"🔄 Updated {a_name} to {next_status}!")
+                    st.rerun()
+            with c4:
+                # Colored Status Visual Badges
+                if str(a_status).lower() == "active":
+                    st.markdown("<span style='color:#00E676; font-weight:bold;'>🟢 Active</span>", unsafe_allow_html=True)
+                else:
+                    st.markdown("<span style='color:#FF4B4B; font-weight:bold;'>🔴 Inactive</span>", unsafe_allow_html=True)
+            with c5:
+                # Complete Deletion Action Engine
+                if st.button("Delete", key=f"del_{a_id}", use_container_width=True):
+                    # Filter matching values safely from base state storage frames
+                    st.session_state.athletes = st.session_state.athletes[st.session_state.athletes[orig_id_col].astype(str).str.strip() != a_id]
+                    st.success(f"🗑️ Removed {a_name} completely from roster.")
+                    st.rerun()
+                    
 # ==========================================
 # MODULE: LIVE SPRINT REPETITION ENTRY TRACKER
 # ==========================================
