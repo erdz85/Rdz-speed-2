@@ -274,7 +274,11 @@ if app_portal == "👥 Roster & Onboarding Hub":
 
     # Initialize the athletes DataFrame if it doesn't exist in session memory
     if 'athletes' not in st.session_state:
-        st.session_state.athletes = pd.DataFrame(columns=['id', 'name', 'gender', 'grade', 'group', 'tier', 'status'])
+        import os
+        if os.path.exists("roster_storage.csv"):
+            st.session_state.athletes = pd.read_csv("roster_storage.csv")
+        else:
+            st.session_state.athletes = pd.DataFrame(columns=['id', 'name', 'gender', 'grade', 'group', 'tier', 'status'])
 
     # --- SECTION 1: ATHLETE ONBOARDING FORM ---
     st.subheader("📝 Onboard New Athlete")
@@ -320,6 +324,10 @@ if app_portal == "👥 Roster & Onboarding Hub":
                 }
                 
                 st.session_state.athletes = pd.concat([st.session_state.athletes, pd.DataFrame([new_athlete])], ignore_index=True)
+                
+                # [PERSISTENCE UPDATE]: Write to storage disk on addition
+                st.session_state.athletes.to_csv("roster_storage.csv", index=False)
+                
                 st.success(f"🎉 Onboarded {new_name} successfully as {new_status}!")
                 st.rerun()
 
@@ -384,6 +392,9 @@ if app_portal == "👥 Roster & Onboarding Hub":
                     else:
                         st.session_state.athletes.loc[idx_match, 'Status'] = next_status
                         
+                    # [PERSISTENCE UPDATE]: Write to storage disk on change of status
+                    st.session_state.athletes.to_csv("roster_storage.csv", index=False)
+                    
                     st.toast(f"🔄 Updated {a_name} to {next_status}!")
                     st.rerun()
             with c4:
@@ -397,6 +408,10 @@ if app_portal == "👥 Roster & Onboarding Hub":
                 if st.button("Delete", key=f"del_{a_id}", use_container_width=True):
                     # Filter matching values safely from base state storage frames
                     st.session_state.athletes = st.session_state.athletes[st.session_state.athletes[orig_id_col].astype(str).str.strip() != a_id]
+                    
+                    # [PERSISTENCE UPDATE]: Write to storage disk on complete delete removal
+                    st.session_state.athletes.to_csv("roster_storage.csv", index=False)
+                    
                     st.success(f"🗑️ Removed {a_name} completely from roster.")
                     st.rerun()
                     
@@ -1245,8 +1260,12 @@ elif app_portal == "⏱️ Workout Tracker":
                             else:
                                 st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, log_entry_df], ignore_index=True)
                             
+                            # [PERSISTENCE UPDATE]: Write logs directly to disk cache
+                            st.session_state.workout_logs.to_csv("workout_logs_storage.csv", index=False)
+                            
                             st.toast(f"✅ Logged {fat_time:.2f}s for {athlete_name}!")
                             st.rerun()
+                            
 # ==========================================
 # MODULE: LIVE SESSION DASHBOARD
 # ==========================================
