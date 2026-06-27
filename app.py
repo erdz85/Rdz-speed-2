@@ -90,7 +90,7 @@ if "active_athlete_input_id" not in st.session_state: st.session_state.active_at
 
 
 # ==========================================
-# 3. MATHEMATICAL CALCULATION CORES
+# 4. MATHEMATICAL CALCULATION CORES
 # ==========================================
 
 def calculate_relay_go_mark(inc_fly, out_block):
