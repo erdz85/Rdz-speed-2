@@ -90,7 +90,7 @@ if "active_athlete_input_id" not in st.session_state: st.session_state.active_at
 
 
 # ==========================================
-# 4. MATHEMATICAL CALCULATION CORES
+# 3. GLOBAL MATHEMATICAL COMPUTATION ENGINE
 # ==========================================
 
 def calculate_relay_go_mark(inc_fly, out_block):
@@ -102,7 +102,7 @@ def calculate_relay_go_mark(inc_fly, out_block):
         inc_fly = float(inc_fly)
         out_block = float(out_block)
         
-        # SAFETY GUARD: If either runner lacks data, return standard default footsteps
+        # SAFETY GUARD: If either runner lacks data, return standard athletic baseline steps
         if inc_fly >= 99.0 or out_block >= 99.0 or inc_fly <= 0 or out_block <= 0:
             return 18.0  
             
@@ -120,14 +120,14 @@ def calculate_precise_100m(thirty_block, twenty_fly, gender, is_hand_timed=False
     import pandas as pd
     
     if twenty_fly is None or pd.isna(twenty_fly):
-        return None
+        return 0.0
         
     try:
         twenty_fly = float(twenty_fly)
         if twenty_fly <= 0 or twenty_fly >= 99.0:
-            return None
+            return 0.0
     except:
-        return None
+        return 0.0
         
     try:
         if thirty_block is not None and not pd.isna(thirty_block):
@@ -145,33 +145,32 @@ def calculate_precise_100m(thirty_block, twenty_fly, gender, is_hand_timed=False
         if thirty_block is not None:
             thirty_block += 0.24
 
-    # --- FALLBACK MODEL: Fly-Only Calculation ---
+    # --- FALLBACK MECHANISM: Uses 20m Fly-Only model if 30m block start is missing ---
     if thirty_block is None:
         ten_split = twenty_fly / 2.0
         if str(gender).lower() == "male":
-            return round((ten_split * 10) + 1.05, 2)
+            projected_100m = (ten_split * 10) + 1.05  # Formula Varonil
         else:
-            return round((ten_split * 10) + 1.15, 2)
+            projected_100m = (ten_split * 10) + 1.15  # Formula Femenil
+        return float(round(projected_100m, 2))
 
-    # --- CORE MODEL: Dual-Input Piecewise Splicing Formula ---
+    # --- CORE MECHANISM: Runs Piecewise Splicing model when both vectors exist ---
     ten_split = twenty_fly / 2.0
     base_time = thirty_block + (7.0 * ten_split)
     
+    # Dynamic Speed Endurance Decay Constants based on performance tiers
     if str(gender).lower() == "male":
-        decay = 0.12 if base_time < 11.0 else 0.18
+        decay_constant = 0.12 if base_time < 11.0 else 0.18
     else:
-        decay = 0.15 if base_time < 12.2 else 0.25
+        decay_constant = 0.15 if base_time < 12.2 else 0.25
             
-    return round(base_time + decay, 2)
+    return float(round(base_time + decay_constant, 2))
 
-
-# ==========================================
-# BACKWARD COMPATIBILITY LAYER FOR OTHER MODULES
-# ==========================================
 
 def get_best_historical_fat(athlete_id, run_type="20m_fly"):
     """
-    Finds the historical PR for an athlete while safeguarding against column case variations.
+    Finds the historical PR for an athlete while safeguarding against column name changes 
+    and case variations across dataframes.
     """
     import pandas as pd
     if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
@@ -180,10 +179,12 @@ def get_best_historical_fat(athlete_id, run_type="20m_fly"):
     logs = st.session_state.workout_logs.copy()
     logs.columns = [str(c).lower() for c in logs.columns]
     
+    # Dynamic column identification maps
     fat_col = 'normalized_fat_time' if 'normalized_fat_time' in logs.columns else ('fat' if 'fat' in logs.columns else logs.columns[-1])
     type_col = 'type' if 'type' in logs.columns else ('session_type' if 'session_type' in logs.columns else logs.columns[-2])
     
     filtered = logs[(logs["athlete_id"].astype(str).str.strip() == str(athlete_id).strip()) & (logs[type_col] == run_type)]
+    
     if filtered.empty: 
         return float('inf')
         
@@ -192,12 +193,12 @@ def get_best_historical_fat(athlete_id, run_type="20m_fly"):
 
 def project_100m_dash(fat_time, gender):
     """
-    Points legacy page references directly into the updated precision engine.
+    Backward-compatibility wrapper. Points legacy page references directly into 
+    the updated precision piecewise splicing engine.
     """
     if not fat_time or fat_time == 0 or fat_time >= 99.0:
         return 0.0
     return calculate_precise_100m(thirty_block=None, twenty_fly=fat_time, gender=gender)
-
 
 # ==========================================
 # 4. GLOBAL NAVIGATION AND CONTROL ROUTER
