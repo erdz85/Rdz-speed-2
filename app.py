@@ -51,7 +51,7 @@ if 'workout_logs' not in st.session_state:
             'log_id', 'date', 'athlete_id', 'type', 'raw', 'fat', 'proj_100'
         ])
 # ==========================================
-# GLOBAL CORE KINEMATIC UTILITIES
+# GLOBAL CORE KINEMATIC UTILITIES (UPDATED)
 # ==========================================
 
 def normalize_hand_fly(hand_time: float) -> float:
@@ -60,16 +60,30 @@ def normalize_hand_fly(hand_time: float) -> float:
 
 def calculate_projected_100m(block_time: float, fly_time: float, gender: str) -> float:
     """
-    Predicts 100m FAT time using a multi-variable kinematic projection model.
-    Accounts for gender-specific maximum velocity decay rates.
+    Predicts 100m FAT time using the Curved Velocity Regression Model.
+    Bypasses multi-variable inflation to prevent mathematical time dilution.
     """
-    gender_clean = str(gender).lower()
-    if 'female' in gender_clean:
-        # Curve modeling formula optimized for female sprint acceleration profiles
-        return round((fly_time * 5.10) + (block_time * 0.25) + 1.40, 2)
-    else:
-        # Curve modeling formula optimized for male sprint acceleration profiles
-        return round((fly_time * 4.95) + (block_time * 0.22) + 1.20, 2)
+    try:
+        f_time = float(fly_time)
+        # Handle empty/missing data flags safely
+        if f_time == 99.0 or f_time <= 0:
+            return 99.0
+            
+        gender_clean = str(gender).lower().strip()
+        
+        if 'female' in gender_clean or 'girl' in gender_clean:
+            # High School Girls Constant Matrix Baseline
+            gender_constant = 1.17
+        else:
+            # High School Boys Constant Matrix Baseline
+            gender_constant = 1.15
+
+        # Precise Sports Science Method: (Fly Time / 20 * 100) + Constant
+        projected_time = (f_time * 5.0) + gender_constant
+        return round(projected_time, 2)
+        
+    except (ValueError, TypeError):
+        return 99.0
 # ==========================================
 # 1. APP CONFIGURATION & STYLE SETUP
 # ==========================================
@@ -153,7 +167,7 @@ if "keypad_buffer" not in st.session_state: st.session_state.keypad_buffer = ""
 if "active_athlete_input_id" not in st.session_state: st.session_state.active_athlete_input_id = None
 
 # ==========================================
-# 3. MATHEMATICAL CALCULATION CORES
+# 3. MATHEMATICAL CALCULATION CORES (UPDATED)
 # ==========================================
 
 def calculate_relay_go_mark(inc_fly, out_block):
@@ -177,21 +191,23 @@ def calculate_relay_go_mark(inc_fly, out_block):
 
 def calculate_precise_100m(thirty_block, twenty_fly, gender, is_hand_timed=False):
     """
-    Calculates 100m performance predictions using a piecewise velocity splicing model.
-    Includes automated fallback handling and performance-tiered speed endurance decay constants.
+    Advanced Piecewise Kinetic Splicing Model.
+    Uses real 30m block data for acceleration mechanics + 20m fly for max velocity profile.
+    Automatically falls back to the Curved Velocity Regression Model if block data is missing.
     """
     import pandas as pd
     
+    # 1. Validate and Clean Fly Time (Absolute Required Baseline)
     if twenty_fly is None or pd.isna(twenty_fly):
         return None
-        
     try:
         twenty_fly = float(twenty_fly)
         if twenty_fly <= 0 or twenty_fly >= 99.0:
             return None
-    except:
+    except (ValueError, TypeError):
         return None
         
+    # 2. Validate and Clean Block Time (Optional Premium Precision Input)
     try:
         if thirty_block is not None and not pd.isna(thirty_block):
             thirty_block = float(thirty_block)
@@ -199,33 +215,29 @@ def calculate_precise_100m(thirty_block, twenty_fly, gender, is_hand_timed=False
                 thirty_block = None
         else:
             thirty_block = None
-    except:
+    except (ValueError, TypeError):
         thirty_block = None
     
-    # Adjust for manual stopwatch variations to match FAT parameters
+    # 3. Apply Uniform FAT Electronic Offsets if Hand-Timed (+0.24)
     if is_hand_timed:
-        twenty_fly += 0.15
+        twenty_fly = round(twenty_fly + 0.24, 2)
         if thirty_block is not None:
-            thirty_block += 0.24
+            thirty_block = round(thirty_block + 0.24, 2)
 
-    # --- FALLBACK MODEL: Fly-Only Calculation ---
-    if thirty_block is None:
-        ten_split = twenty_fly / 2.0
-        if str(gender).lower() == "male":
-            return round((ten_split * 10) + 1.05, 2)
-        else:
-            return round((ten_split * 10) + 1.15, 2)
-
-    # --- CORE MODEL: Dual-Input Piecewise Splicing Formula ---
-    ten_split = twenty_fly / 2.0
-    base_time = thirty_block + (7.0 * ten_split)
+    # 4. EXECUTE DUAL-INPUT MODEL OR FALLBACK
+    gender_clean = str(gender).lower().strip()
     
-    if str(gender).lower() == "male":
-        decay = 0.12 if base_time < 11.0 else 0.18
+    if thirty_block is not None:
+        # --- MODEL A: PIECEWISE KINETIC SPLICING (MAX PRECISION) ---
+        # 30m block start + remaining 70m run at 20m fly terminal velocity (70 / 20 = 3.5)
+        projected_100m = thirty_block + (twenty_fly * 3.5)
     else:
-        decay = 0.15 if base_time < 12.2 else 0.25
+        # --- MODEL B: CURVED VELOCITY REGRESSION (FALLBACK) ---
+        # Used when block data is unrecorded. Employs fixed inertia constants.
+        gender_constant = 1.17 if ('female' in gender_clean or 'girl' in gender_clean) else 1.15
+        projected_100m = (twenty_fly * 5.0) + gender_constant
             
-    return round(base_time + decay, 2)
+    return round(projected_100m, 2)
 
 
 # ==========================================
@@ -237,6 +249,44 @@ def get_best_historical_fat(athlete_id, run_type="20m_fly"):
     Finds the historical PR for an athlete while safeguarding against column case variations.
     """
     import pandas as pd
+    import streamlit as st
+    
+    if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
+        return float('inf')
+        
+    logs = st.session_state.workout_logs.copy()
+    logs.columns = [str(c).lower() for c in logs.columns]
+    
+    fat_col = 'normalized_fat_time' if 'normalized_fat_time' in logs.columns else ('fat' if 'fat' in logs.columns else logs.columns[-1])
+    type_col = 'type' if 'type' in logs.columns else ('session_type' if 'session_type' in logs.columns else logs.columns[-2])
+    
+    filtered = logs[(logs["athlete_id"].astype(str).str.strip() == str(athlete_id).strip()) & (logs[type_col] == run_type)]
+    if filtered.empty: 
+        return float('inf')
+        
+    return pd.to_numeric(filtered[fat_col], errors='coerce').min()
+
+
+def project_100m_dash(fat_time, gender):
+    """
+    Points legacy page references directly into the updated precision engine.
+    """
+    if not fat_time or fat_time == 0 or fat_time >= 99.0:
+        return 0.0
+    return calculate_precise_100m(thirty_block=None, twenty_fly=fat_time, gender=gender)
+
+
+# ==========================================
+# BACKWARD COMPATIBILITY LAYER FOR OTHER MODULES
+# ==========================================
+
+def get_best_historical_fat(athlete_id, run_type="20m_fly"):
+    """
+    Finds the historical PR for an athlete while safeguarding against column case variations.
+    """
+    import pandas as pd
+    import streamlit as st
+    
     if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
         return float('inf')
         
@@ -1370,7 +1420,7 @@ elif app_portal == "📄 AD Report Export":
         )
             
 # ==========================================
-# MODULE: WORKOUT TRACKER
+# MODULE: WORKOUT TRACKER (UPDATED)
 # ==========================================
 elif app_portal == "⏱️ Workout Tracker":
     st.title("⏱️ Live Sprint Repetition Entry Tracker")
@@ -1482,20 +1532,36 @@ elif app_portal == "⏱️ Workout Tracker":
                             st.error("⚠️ Enter valid split time.")
                         else:
                             from datetime import datetime
+                            import pandas as pd
                             
-                            # Standardize hand-timing rules
+                            # Standardize hand-timing rules using your global core logic
                             fat_time = raw_time
                             if timing_system == "Hand-Timed (Stopwatch)":
                                 if 'normalize_hand_fly' in globals():
                                     fat_time = normalize_hand_fly(raw_time)
                                 else:
-                                    fat_time = raw_time + 0.24 
+                                    fat_time = round(raw_time + 0.24, 2)
                             
-                            # Calculate accurate curve projections safely 
-                            if 'calculate_projected_100m' in globals():
-                                proj = calculate_projected_100m(4.5, fat_time, athlete_gender) if session_type == "20m_fly" else calculate_projected_100m(fat_time, 2.3, athlete_gender)
+                            # --- SYNCED PRECISION INTEGRATION LAYER ---
+                            if 'calculate_precise_100m' in globals():
+                                if session_type == "20m_fly":
+                                    # Use today's fly + historical block PR if it exists
+                                    proj = calculate_precise_100m(thirty_block=best_block_val, twenty_fly=fat_time, gender=athlete_gender)
+                                else:
+                                    # Use today's block + historical fly PR if it exists
+                                    proj = calculate_precise_100m(thirty_block=fat_time, twenty_fly=best_fly_val, gender=athlete_gender)
+                                    
+                                    # Safety fallback if athlete does not have an all-time fly recorded yet
+                                    if proj is None:
+                                        gender_const = 1.17 if 'female' in athlete_gender else 1.15
+                                        proj = round((fat_time * 2.5) + gender_const, 2)
                             else:
-                                proj = (fat_time * 5.0) + 1.25 if session_type == "20m_fly" else (fat_time * 2.5) + 2.0
+                                # Safe visual fallback in case modules haven't completely updated
+                                if session_type == "20m_fly":
+                                    gender_const = 1.17 if 'female' in athlete_gender else 1.15
+                                    proj = round((fat_time * 5.0) + gender_const, 2)
+                                else:
+                                    proj = round((fat_time * 2.5) + 1.5, 2)
                             
                             # Generate Log Dictionary
                             new_log = {
@@ -1521,7 +1587,7 @@ elif app_portal == "⏱️ Workout Tracker":
                             st.rerun()
                             
 # ==========================================
-# MODULE: LIVE SESSION DASHBOARD
+# MODULE: LIVE SESSION DASHBOARD (UPDATED)
 # ==========================================
 elif app_portal == "📆 Live Session Dashboard":
     st.title("📆 Today's Live Session Dashboard")
@@ -1532,6 +1598,7 @@ elif app_portal == "📆 Live Session Dashboard":
         st.info("ℹ️ No workout logs recorded in the system yet. Sprints logged today will appear here.")
     else:
         from datetime import datetime
+        import pandas as pd
         today_str = datetime.today().strftime('%Y-%m-%d')
         
         # 1. Standardize Workout Logs DataFrame
@@ -1597,30 +1664,51 @@ elif app_portal == "📆 Live Session Dashboard":
                 a_name = athlete[name_key]
                 a_gender = str(athlete[gender_key]).lower() if gender_key and pd.notna(athlete[gender_key]) else 'male'
                 
-                # Pull metrics out safely
+                # Pull today's metrics
                 best_fly = session_fly.get(a_id, None)
                 best_block = session_block.get(a_id, None)
                 
                 fly_str = f"{best_fly:.2f}s" if best_fly else "--"
                 block_str = f"{best_block:.2f}s" if best_block else "--"
                 
-                # --- GENDER SPECIFIC KINEMATIC PROJECTION SYSTEM ---
-                # Fallbacks run if they only performed one type of drill profile today
-                calc_fly = best_fly if best_fly else (best_block / 1.95 if best_block else None)
-                calc_block = best_block if best_block else (best_fly * 1.95 if best_fly else None)
+                # --- ELITE PRECISION KINEMATIC PROJECTION SYSTEM ---
+                # Prioritize today's efforts. If an effort is missing, look up historical PRs before falling back.
+                fly_input = best_fly
+                block_input = best_block
                 
-                if calc_fly and calc_block:
-                    if 'calculate_projected_100m' in globals():
-                        proj_val = calculate_projected_100m(calc_block, calc_fly, a_gender)
-                    else:
-                        # Dynamic mathematical system formula if globals are unmapped
-                        if 'female' in a_gender:
-                            proj_val = (calc_fly * 5.10) + (calc_block * 0.25) + 1.40
-                        else:
-                            proj_val = (calc_fly * 4.95) + (calc_block * 0.22) + 1.20
-                    proj_str = f"**{proj_val:.2f}s**"
+                if fly_input is None:
+                    hist_fly = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '20m_fly')][fat_col]
+                    if not hist_fly.empty:
+                        fly_input = hist_fly.min()
+                        
+                if block_input is None:
+                    hist_block = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '30m_block')][fat_col]
+                    if not hist_block.empty:
+                        block_input = hist_block.min()
+                
+                # Compute projection via updated core calculation engine
+                if 'calculate_precise_100m' in globals():
+                    proj_val = calculate_precise_100m(thirty_block=block_input, twenty_fly=fly_input, gender=a_gender)
+                    
+                    # Safety fallback if athlete has literally never run a 20m fly in app history
+                    if proj_val is None and block_input is not None:
+                        gender_const = 1.17 if 'female' in a_gender else 1.15
+                        proj_val = round((block_input * 2.5) + gender_const, 2)
                 else:
-                    proj_str = "--"
+                    # Clean math fallback in case global engine hasn't fully reloaded
+                    if fly_input is not None:
+                        if block_input is not None:
+                            proj_val = round(block_input + (fly_input * 3.5), 2)
+                        else:
+                            gender_const = 1.17 if 'female' in a_gender else 1.15
+                            proj_val = round((fly_input * 5.0) + gender_const, 2)
+                    elif block_input is not None:
+                        gender_const = 1.17 if 'female' in a_gender else 1.15
+                        proj_val = round((block_input * 2.5) + gender_const, 2)
+                    else:
+                        proj_val = None
+                
+                proj_str = f"**{proj_val:.2f}s**" if proj_val else "--"
                     
                 # Render Row Elements Matrix
                 r1, r2, r3, r4 = st.columns([3, 2, 2, 3])
