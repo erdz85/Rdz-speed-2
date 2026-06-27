@@ -468,8 +468,8 @@ if app_portal == "👥 Roster & Onboarding Hub":
 # ==========================================
 elif app_portal == "⏱️ Workout Tracker":
     st.title("⏱️ Unified Workout Hub")
-    tab1, tab2 = st.tabs(["🆕 Log New Reps", "📊 History & Stats"])
-    # 1. Prepare historical PR lookups BEFORE the tabs
+    
+    # 1. Prepare historical PR lookups
     history_fly = {}
     history_block = {}
     
@@ -477,19 +477,16 @@ elif app_portal == "⏱️ Workout Tracker":
         logs_clean = st.session_state.workout_logs.copy()
         logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
         
-        # Ensure 'fat' exists for lookup
         fat_col = 'fat' if 'fat' in logs_clean.columns else logs_clean.columns[-2]
         
         history_fly = logs_clean[logs_clean['type'] == '20m_fly'].groupby('athlete_id')[fat_col].min().to_dict()
         history_block = logs_clean[logs_clean['type'] == '30m_block'].groupby('athlete_id')[fat_col].min().to_dict()
 
-    # 2. Now initialize the Tabs
+    # 2. Initialize the Tabs ONCE
     tab1, tab2 = st.tabs(["🆕 Log New Reps", "📊 History & Stats"])
     
     with tab1:
-        # Now your row-rendering loop will work because history_fly exists!
-        ...
-        # 1. Configuration Controls
+        # Configuration
         col_sys, col_drill = st.columns(2)
         with col_sys:
             timing_system = st.radio("Timing System:", ["Electronic / FAT (Freelap)", "Hand-Timed (Stopwatch)"], horizontal=True)
@@ -498,7 +495,7 @@ elif app_portal == "⏱️ Workout Tracker":
         
         st.write("---")
         
-        # 2. Header
+        # Header and Loop
         h1, h2, h3, h4, h5 = st.columns([3, 2, 2, 3, 2])
         with h1: st.markdown("🏃 **Athlete**")
         with h2: st.markdown("⚡ **Best Fly**")
@@ -506,11 +503,8 @@ elif app_portal == "⏱️ Workout Tracker":
         with h4: st.markdown("⏱️ **Enter Time (s)**")
         with h5: st.markdown("💾 **Action**")
 
-        # 3. Entry Rows
         for index, athlete in st.session_state.athletes.iterrows():
             string_id = str(athlete['id']).strip()
-            
-            # Fetch your existing PR logic here
             best_fly = history_fly.get(string_id, 0)
             best_block = history_block.get(string_id, 0)
             
@@ -525,13 +519,9 @@ elif app_portal == "⏱️ Workout Tracker":
                     if raw_time <= 0:
                         st.error("Enter time > 0")
                     else:
-                        # Normalize time
                         fat_time = raw_time + 0.24 if timing_system == "Hand-Timed (Stopwatch)" else raw_time
-                        
-                        # USE THE UNIFIED MATH
                         proj = get_unified_projection(session_type, fat_time, best_block, best_fly, athlete.get('gender', 'male'))
                         
-                        # Save to logs
                         new_log = {"date": datetime.today().strftime('%Y-%m-%d'), "athlete_id": string_id, "type": session_type, "fat": fat_time, "proj_100": proj}
                         st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log])], ignore_index=True)
                         st.session_state.workout_logs.to_csv("workout_logs_storage.csv", index=False)
@@ -539,31 +529,16 @@ elif app_portal == "⏱️ Workout Tracker":
 
     with tab2:
         st.subheader("Performance History")
-        
-        # 1. Check if logs exist
         if 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty:
-            # Sort by date (newest first)
             display_df = st.session_state.workout_logs.sort_values(by='date', ascending=False)
-            
-            # Show the table
-            st.dataframe(
-                display_df,
-                use_container_width=True,
-                column_config={
-                    "proj_100": st.column_config.NumberColumn("Proj. 100m", format="%.2fs"),
-                    "fat": st.column_config.NumberColumn("FAT Time", format="%.2fs"),
-                    "raw": st.column_config.NumberColumn("Raw Time", format="%.2fs")
-                }
-            )
-            
-            # 2. Cleanup / Reset Button
+            st.dataframe(display_df, use_container_width=True)
             if st.button("🗑️ Clear All Logs"):
                 st.session_state.workout_logs = pd.DataFrame(columns=["date", "athlete_id", "type", "raw", "fat", "proj_100"])
                 st.session_state.workout_logs.to_csv("workout_logs_storage.csv", index=False)
                 st.rerun()
         else:
-            st.info("No records found. Use the 'Log New Reps' tab to get started.")
-
+            st.info("No records found.")
+            
 # ==========================================
 # MODULE 3: LIVE SESSION DASHBOARD (UPDATED)
 # ==========================================
