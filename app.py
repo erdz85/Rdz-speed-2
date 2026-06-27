@@ -1,37 +1,39 @@
 import streamlit as st
 import pandas as pd
-import math
-import plotly.express as px
-import qrcode
-import io
-from datetime import datetime
-import streamlit as pd
-import pandas as pd
+import os
 from datetime import datetime
 
-# Configure main Streamlit page settings
 st.set_page_config(
     page_title="High-Performance Sprint Analytics",
     page_icon="⚡",
     layout="wide"
 )
 
+# --- LOCAL PERSISTENCE STORAGE TRACKERS ---
+ROSTER_CACHE = "roster_storage.csv"
+LOGS_CACHE = "workout_logs_storage.csv"
+
 # ==========================================
-# GLOBAL APP STATE INITIALIZATION
+# GLOBAL APP STATE INITIALIZATION (AUTO-LOAD)
 # ==========================================
 
-# 1. Initialize Roster Database if empty
+# 1. Initialize Roster Database (Checks disk backup first)
 if 'athletes' not in st.session_state:
-    st.session_state.athletes = pd.DataFrame(columns=[
-        'id', 'full_name', 'grade', 'group', 'tier', 'gender'
-    ])
+    if os.path.exists(ROSTER_CACHE):
+        st.session_state.athletes = pd.read_csv(ROSTER_CACHE)
+    else:
+        st.session_state.athletes = pd.DataFrame(columns=[
+            'id', 'full_name', 'grade', 'group', 'tier', 'gender'
+        ])
 
-# 2. Initialize Workout Performance Logs if empty
+# 2. Initialize Workout Performance Logs (Checks disk backup first)
 if 'workout_logs' not in st.session_state:
-    st.session_state.workout_logs = pd.DataFrame(columns=[
-        'log_id', 'date', 'athlete_id', 'type', 'raw', 'fat', 'proj_100'
-    ])
-
+    if os.path.exists(LOGS_CACHE):
+        st.session_state.workout_logs = pd.read_csv(LOGS_CACHE)
+    else:
+        st.session_state.workout_logs = pd.DataFrame(columns=[
+            'log_id', 'date', 'athlete_id', 'type', 'raw', 'fat', 'proj_100'
+        ])
 # ==========================================
 # GLOBAL CORE KINEMATIC UTILITIES
 # ==========================================
