@@ -191,52 +191,37 @@ def calculate_relay_go_mark(inc_fly, out_block):
 
 def calculate_precise_100m(thirty_block, twenty_fly, gender, is_hand_timed=False):
     """
-    Advanced Piecewise Kinetic Splicing Model.
-    Uses real 30m block data for acceleration mechanics + 20m fly for max velocity profile.
-    Automatically falls back to the Curved Velocity Regression Model if block data is missing.
+    Calculates 100m performance predictions using the Curved Velocity Regression Model.
+    Bypasses old piecewise variations to match standard reference matrices perfectly.
     """
     import pandas as pd
     
-    # 1. Validate and Clean Fly Time (Absolute Required Baseline)
     if twenty_fly is None or pd.isna(twenty_fly):
         return None
+        
     try:
         twenty_fly = float(twenty_fly)
         if twenty_fly <= 0 or twenty_fly >= 99.0:
             return None
-    except (ValueError, TypeError):
+    except:
         return None
-        
-    # 2. Validate and Clean Block Time (Optional Premium Precision Input)
-    try:
-        if thirty_block is not None and not pd.isna(thirty_block):
-            thirty_block = float(thirty_block)
-            if thirty_block <= 0 or thirty_block >= 99.0:
-                thirty_block = None
-        else:
-            thirty_block = None
-    except (ValueError, TypeError):
-        thirty_block = None
-    
-    # 3. Apply Uniform FAT Electronic Offsets if Hand-Timed (+0.24)
+
+    # Adjust for manual stopwatch variations using your global FAT offset (+0.24)
     if is_hand_timed:
         twenty_fly = round(twenty_fly + 0.24, 2)
-        if thirty_block is not None:
-            thirty_block = round(thirty_block + 0.24, 2)
 
-    # 4. EXECUTE DUAL-INPUT MODEL OR FALLBACK
+    # --- SPORTS SCIENCE CURVED VELOCITY REGRESSION MODEL ---
     gender_clean = str(gender).lower().strip()
-    
-    if thirty_block is not None:
-        # --- MODEL A: PIECEWISE KINETIC SPLICING (MAX PRECISION) ---
-        # 30m block start + remaining 70m run at 20m fly terminal velocity (70 / 20 = 3.5)
-        projected_100m = thirty_block + (twenty_fly * 3.5)
+    if "female" in gender_clean or "girl" in gender_clean:
+        # High School Girls Constant Matrix Baseline
+        gender_constant = 1.17
     else:
-        # --- MODEL B: CURVED VELOCITY REGRESSION (FALLBACK) ---
-        # Used when block data is unrecorded. Employs fixed inertia constants.
-        gender_constant = 1.17 if ('female' in gender_clean or 'girl' in gender_clean) else 1.15
-        projected_100m = (twenty_fly * 5.0) + gender_constant
-            
+        # High School Boys Constant Matrix Baseline
+        gender_constant = 1.15
+
+    # Exact Formula: ((20m Fly Time / 20) * 100) + Constant -> simplifies to (Fly Time * 5) + Constant
+    projected_100m = (twenty_fly * 5.0) + gender_constant
+        
     return round(projected_100m, 2)
 
 
@@ -274,8 +259,7 @@ def project_100m_dash(fat_time, gender):
     if not fat_time or fat_time == 0 or fat_time >= 99.0:
         return 0.0
     return calculate_precise_100m(thirty_block=None, twenty_fly=fat_time, gender=gender)
-
-
+    
 # ==========================================
 # 4. GLOBAL NAVIGATION AND CONTROL ROUTER
 # ==========================================
