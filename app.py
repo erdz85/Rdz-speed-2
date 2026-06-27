@@ -2,12 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
-
-# Add this temporary block under your imports, run once, then delete it.
-if 'workout_logs' in st.session_state:
-    # Filter out the corrupt entries
-    st.session_state.workout_logs = st.session_state.workout_logs[st.session_state.workout_logs['proj_100'] < 18.0]
-    st.session_state.workout_logs.to_csv("workout_logs_storage.csv", index=False)
     
 def get_unified_projection(session_type, fat_time, block_val, fly_val, gender):
     """The single source of truth for all 100m projections."""
