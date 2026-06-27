@@ -752,6 +752,7 @@ elif app_portal == "🏆 Team Leaderboards":
                             st.warning(f"🏆 {badge_text}")
                         else:
                             st.info(f"🔥 Hot Streak")
+                            
 # ==========================================
 # MODULE 4: ATHLETE PROGRESS TRENDS (AUDITED)
 # ==========================================
@@ -971,6 +972,7 @@ elif app_portal == "📈 Athlete Progress Trends":
                     st.warning("⚠️ **CNS Fatigue Warning:** Performance velocity has dropped greater than 3% over consecutive repetitions. High hamstring/soft-tissue injury risk detected. \n\n**Coaching Guidance:** Shut down active max-effort drilling immediately; prescribe low-impact recovery mechanics.")
                 else:
                     st.success("✅ **CNS Muscle Readiness:** Central Nervous System recovery markers are green. No significant performance decay indicators flagged. Athlete cleared for high-intensity neuromuscular output.")
+                    
 # ==========================================
 # MODULE 5: RELAY OPTIMIZER POOL & GO-MARK GENERATOR (AUDITED)
 # ==========================================
@@ -1244,15 +1246,22 @@ elif app_portal == "📄 AD Report Export":
                 delta_count += 1
 
             # --- SYNCHRONIZED CORE MATH INTEGRATION ENGINE ---
-            if pr_val:
+            if pr_val and pr_val > 0:
+                # Ensure pr_val is treated as a float for calculation
+                pr_val = float(pr_val)
+                
                 if 'calculate_precise_100m' in globals():
                     proj_val = calculate_precise_100m(thirty_block=best_block_val, twenty_fly=pr_val, gender=a_gender)
                 else:
-                    gender_const = 1.17 if 'female' in a_gender else 1.15
-                    proj_val = round((pr_val * 5.0) + gender_const, 2)
+                    # High-precision fallback logic
+                    accel_constant = 1.25 if 'female' in a_gender else 1.15
+                    proj_val = round((pr_val * 5.0) + accel_constant, 2)
+            else:
+                proj_val = None
             
-            is_qualifier = (proj_val <= state_qual_time) if proj_val else False
-            proj_str = f"{proj_val:.2f}s" if proj_val else "--"
+            # --- STRING FORMATTING & QUALIFIER FLAG ---
+            is_qualifier = (proj_val is not None and proj_val <= state_qual_time)
+            proj_str = f"{proj_val:.2f}s" if proj_val is not None else "--"
             if is_qualifier:
                 proj_str += " *"
 
@@ -1782,6 +1791,3 @@ elif app_portal == "📆 Live Session Dashboard":
                 with r3: st.markdown(f"<span style='color:#00E676;'>{block_str}</span>", unsafe_allow_html=True)
                 with r4: st.markdown(f"<span style='color:#00B0FF;'>{proj_str}</span>", unsafe_allow_html=True)
                 st.write("---")
-
-
-
