@@ -118,7 +118,7 @@ app_portal = st.sidebar.radio("Go To Module Portal:", [
     "👥 Roster & Onboarding Hub",
     "⏱️ Workout Tracker",   
     "📆 Live Session Dashboard",
-    "🤝 4x100m Relay Builder",
+    "🤝 Relay Optimizer Pool",
     "📈 Athlete Progress Trends",
     "🏆 Team Leaderboards", 
     "📄 AD Report Export"
