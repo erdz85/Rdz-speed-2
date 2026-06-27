@@ -1217,7 +1217,8 @@ elif app_portal == "📄 AD Report Export":
         elif squad_division == "VARSITY GIRLS":
             active_squad = active_squad[(active_squad['tier'].astype(str).str.lower() == 'varsity') & (active_squad['gender'].astype(str).str.lower() == 'female')]
         elif squad_division == "FROSH-SOPH":
-            active_squad = active_squad[active_squad['grade'].astype(str).str.strip().isin(['9', '10'])]
+            # Direct string validation checking for both numerical and alphabetical grades safely
+            active_squad = active_squad[active_squad['grade'].astype(str).str.strip().isin(['9', '10', '9th', '10th'])]
 
         # Load workout log records safely
         has_logs = 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty
@@ -1225,8 +1226,9 @@ elif app_portal == "📄 AD Report Export":
             logs_clean = st.session_state.workout_logs.copy()
             logs_clean.columns = [str(c).lower().strip() for c in logs_clean.columns]
             logs_clean['athlete_id'] = logs_clean['athlete_id'].astype(str).str.strip()
-            logs_clean['fat'] = pd.to_numeric(logs_clean['fat'], errors='coerce')
-            logs_clean['proj_100'] = pd.to_numeric(logs_clean['proj_100'], errors='coerce')
+            
+            fat_col = 'fat' if 'fat' in logs_clean.columns else ('time' if 'time' in logs_clean.columns else logs_clean.columns[-2])
+            logs_clean[fat_col] = pd.to_numeric(logs_clean[fat_col], errors='coerce')
 
         # 3. Dynamic Performance Metrics Processing Loop
         processed_roster = []
@@ -1241,6 +1243,7 @@ elif app_portal == "📄 AD Report Export":
         for _, athlete in active_squad.iterrows():
             a_id = str(athlete['id']).strip()
             a_name = str(athlete['name']).strip()
+            a_gender = str(athlete.get('gender', 'male')).lower()
             
             baseline_val = None
             pr_val = None
@@ -1249,13 +1252,10 @@ elif app_portal == "📄 AD Report Export":
             
             if has_logs:
                 # Process 20m fly interval tracking logs
-                fly_logs = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '20m_fly')].sort_values(by='log_id')
+                fly_logs = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '20m_fly')].sort_values(by='date')
                 if not fly_logs.empty:
-                    baseline_val = float(fly_logs.iloc[0]['fat'])
-                    pr_val = float(fly_logs['fat'].min())
-                    
-                    # Target projected 100m linked directly to the PR performance execution
-                    proj_val = float(fly_logs[fly_logs['fat'] == pr_val].iloc[0]['proj_100'])
+                    baseline_val = float(fly_logs.iloc[0][fat_col])
+                    pr_val = float(fly_logs[fat_col].min())
                     
                     # Accumulate team velocity parameters (v = 20m / t)
                     if pr_val > 0:
@@ -1265,7 +1265,7 @@ elif app_portal == "📄 AD Report Export":
                 # Process 30m starting block data streams
                 block_logs = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '30m_block')]
                 if not block_logs.empty:
-                    best_block_val = float(block_logs['fat'].min())
+                    best_block_val = float(block_logs[fat_col].min())
 
             # Map display strings elegantly
             base_str = f"{baseline_val:.2f}s FAT" if baseline_val else "--"
@@ -1278,6 +1278,14 @@ elif app_portal == "📄 AD Report Export":
                 total_deltas += diff
                 delta_count += 1
 
+            # --- SYNCHRONIZED CORE MATH INTEGRATION ENGINE ---
+            if pr_val:
+                if 'calculate_precise_100m' in globals():
+                    proj_val = calculate_precise_100m(thirty_block=best_block_val, twenty_fly=pr_val, gender=a_gender)
+                else:
+                    gender_const = 1.17 if 'female' in a_gender else 1.15
+                    proj_val = round((pr_val * 5.0) + gender_const, 2)
+            
             is_qualifier = (proj_val <= state_qual_time) if proj_val else False
             proj_str = f"{proj_val:.2f}s" if proj_val else "--"
             if is_qualifier:
@@ -1297,8 +1305,8 @@ elif app_portal == "📄 AD Report Export":
             # Populate evaluation dict for backup sorting
             relay_pool.append({
                 "name": a_name,
-                "best_fly": pr_val if pr_val else 2.20,
-                "best_block": best_block_val if best_block_val else 4.20
+                "best_fly": pr_val if pr_val else 99.0,
+                "best_block": best_block_val if best_block_val else 99.0
             })
 
         # Calculate high-level performance metrics summaries
@@ -1310,19 +1318,19 @@ elif app_portal == "📄 AD Report Export":
         # 4. CROSS-MODULE LINEUP INTEGRATION (READS FROM MODULE 5 OVERRIDES)
         # =========================================================================
         if 'custom_relay_lineup' in st.session_state and isinstance(st.session_state.custom_relay_lineup, dict):
-            # Read exact manual selections from Module 5
+            # Read exact manual selections from Module 5 safely
             c_lineup = st.session_state.custom_relay_lineup
-            leg1_name = c_lineup['leg1']['name']
-            leg1_metric = c_lineup['leg1']['metric']
+            leg1_name = c_lineup.get('leg1', {}).get('name', 'Vacant Slot')
+            leg1_metric = c_lineup.get('leg1', {}).get('metric', '[No Data]')
             
-            leg2_name = c_lineup['leg2']['name']
-            leg2_metric = c_lineup['leg2']['metric']
+            leg2_name = c_lineup.get('leg2', {}).get('name', 'Vacant Slot')
+            leg2_metric = c_lineup.get('leg2', {}).get('metric', '[No Data]')
             
-            leg3_name = c_lineup['leg3']['name']
-            leg3_metric = c_lineup['leg3']['metric']
+            leg3_name = c_lineup.get('leg3', {}).get('name', 'Vacant Slot')
+            leg3_metric = c_lineup.get('leg3', {}).get('metric', '[No Data]')
             
-            leg4_name = c_lineup['leg4']['name']
-            leg4_metric = c_lineup['leg4']['metric']
+            leg4_name = c_lineup.get('leg4', {}).get('name', 'Vacant Slot')
+            leg4_metric = c_lineup.get('leg4', {}).get('metric', '[No Data]')
         else:
             # Fallback Selection Engine: Auto-calculate default if Module 5 hasn't run yet
             leg1_name, leg1_metric = "Vacant Slot", "[No Data]"
@@ -1334,33 +1342,35 @@ elif app_portal == "📄 AD Report Export":
                 # Leg 1: Block Start
                 relay_pool = sorted(relay_pool, key=lambda x: x['best_block'])
                 r1 = relay_pool.pop(0)
-                leg1_name, leg1_metric = r1['name'], f"[Block Start: {r1['best_block']:.2f}s]"
+                leg1_name = r1['name']
+                leg1_metric = f"[Block Start: {r1['best_block']:.2f}s]" if r1['best_block'] != 99.0 else "[No Block Data]"
                 
                 # Leg 2: Straight Fly
                 relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
                 r2 = relay_pool.pop(0)
-                leg2_name, leg2_metric = r2['name'], f"[Fly Split: {r2['best_fly']:.2f}s]"
+                leg2_name = r2['name']
+                leg2_metric = f"[Fly Split: {r2['best_fly']:.2f}s]" if r2['best_fly'] != 99.0 else "[No Fly Data]"
                 
-                # Leg 4: Anchor Closer
+                # Leg 4: Anchor Closer (Fixed structural index key reference error to 'best_fly')
                 relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
                 r4 = relay_pool.pop(0)
-                leg4_name, leg4_metric = r4['name'], f"[Anchor Fly: {r4['fly']:.2f}s]"
+                leg4_name = r4['name']
+                leg4_metric = f"[Anchor Fly: {r4['best_fly']:.2f}s]" if r4['best_fly'] != 99.0 else "[No Fly Data]"
                 
                 # Leg 3: Curve
                 relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
                 r3 = relay_pool.pop(0)
-                leg3_name, leg3_metric = r3['name'], f"[Fly Split: {r3['best_fly']:.2f}s]"
+                leg3_name = r3['name']
+                leg3_metric = f"[Fly Split: {r3['best_fly']:.2f}s]" if r3['best_fly'] != 99.0 else "[No Fly Data]"
 
         # =========================================================================
         # CROSS-MODULE GO MARK SYNCHRONIZER
         # =========================================================================
         if 'relay_go_marks' in st.session_state and isinstance(st.session_state.relay_go_marks, dict):
-            # Pull direct high-precision steps computed via Module 5's action button
             step_1to2 = st.session_state.relay_go_marks.get('1to2', 17.0)
             step_2to3 = st.session_state.relay_go_marks.get('2to3', 17.0)
             step_3to4 = st.session_state.relay_go_marks.get('3to4', 17.0)
         else:
-            # Clean mathematical fallback step equations if optimizer hasn't been engaged
             step_1to2 = 17.0
             step_2to3 = 17.0
             step_3to4 = 17.0
@@ -1494,7 +1504,6 @@ elif app_portal == "📄 AD Report Export":
             st.write("")
             
             st.markdown("### ■ RECOMMENDED RELAY GO MARKS:")
-            # Display step indicators as dynamic whole or float indicators depending on math calculations
             st.markdown(f"- Exch 1 (1 to 2): **{step_1to2:.1f} Steps** | Exch 2 (2 to 3): **{step_2to3:.1f} Steps** | Exch 3 (3 to 4): **{step_3to4:.1f} Steps**")
             st.write("---")
             
