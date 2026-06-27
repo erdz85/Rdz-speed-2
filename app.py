@@ -14,19 +14,35 @@ ROSTER_CACHE = "roster_storage.csv"
 LOGS_CACHE = "workout_logs_storage.csv"
 
 # ==========================================
-# GLOBAL APP STATE INITIALIZATION (AUTO-LOAD)
+# GLOBAL APP STATE INITIALIZATION & HEALING
 # ==========================================
 
-# 1. Initialize Roster Database (Checks disk backup first)
 if 'athletes' not in st.session_state:
     if os.path.exists(ROSTER_CACHE):
-        st.session_state.athletes = pd.read_csv(ROSTER_CACHE)
+        try:
+            df = pd.read_csv(ROSTER_CACHE)
+            
+            # AUTOMATIC DATA HEALER: If columns split, merge them safely
+            df.columns = [str(c).lower().strip() for c in df.columns]
+            if 'full_name' in df.columns and 'name' in df.columns:
+                df['name'] = df['name'].fillna(df['full_name'])
+                df = df.drop(columns=['full_name'])
+            elif 'full_name' in df.columns and 'name' not in df.columns:
+                df = df.rename(columns={'full_name': 'name'})
+                
+            # Re-verify all required columns are present cleanly
+            required_cols = ['id', 'name', 'gender', 'grade', 'group', 'tier', 'status']
+            for col in required_cols:
+                if col not in df.columns:
+                    df[col] = "Active" if col == 'status' else ""
+            
+            st.session_state.athletes = df[required_cols]
+        except Exception:
+            # Fallback safe frame if the file format is heavily corrupted
+            st.session_state.athletes = pd.DataFrame(columns=['id', 'name', 'gender', 'grade', 'group', 'tier', 'status'])
     else:
-        st.session_state.athletes = pd.DataFrame(columns=[
-            'id', 'full_name', 'grade', 'group', 'tier', 'gender'
-        ])
+        st.session_state.athletes = pd.DataFrame(columns=['id', 'name', 'gender', 'grade', 'group', 'tier', 'status'])
 
-# 2. Initialize Workout Performance Logs (Checks disk backup first)
 if 'workout_logs' not in st.session_state:
     if os.path.exists(LOGS_CACHE):
         st.session_state.workout_logs = pd.read_csv(LOGS_CACHE)
