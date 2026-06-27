@@ -694,215 +694,123 @@ elif app_portal == "📈 Athlete Progress Trends":
                     st.success("✅ **CNS Muscle Readiness:** Central Nervous System recovery markers are green. No performance decay indicators flagged.")
 
 # ==========================================
-# MODULE 5: 4x100m RELAY BUILDER
+# MODULE 5: RELAY OPTIMIZER POOL & GO-MARK GENERATOR
 # ==========================================
-elif app_portal == "🤝 4x100m Relay Builder":
-    st.title("🤝 4x100m Exchange & Relay Optimizer")
-    st.markdown("Uses automatic fly-to-block differential metrics to define handoff marks.")
-
-    # Check if we have logs to compute statistics from
-    if ('workout_logs' not in st.session_state or 
-        st.session_state.workout_logs.empty or 
-        'athletes' not in st.session_state or 
-        st.session_state.athletes.empty):
-        
-        st.warning("⚠️ No workout log data found. Showing blueprint fallback preview utilizing template metrics.")
-        
-        relay_lineup = [
-            {"leg": 1, "name": "Jordan Davis", "role": "Starter (Curve Acceleration)", "metric_label": "Best 30m Block", "time": 4.10},
-            {"leg": 2, "name": "Marcus Anderson", "role": "Max Velocity Straight (Extended Distance)", "metric_label": "Best 20m Fly", "time": 1.98},
-            {"leg": 3, "name": "Trey Williams", "role": "Curve Mastery Threshold", "metric_label": "Best 20m Fly", "time": 2.04},
-            {"leg": 4, "name": "Xavier Thomas", "role": "Anchor (Closer)", "metric_label": "Best 20m Fly", "time": 2.10}
-        ]
-    else:
-        # --- DATA ENGINE: COMPUTE BEST LIFETIME METRICS PER ATHLETE ---
-        logs = st.session_state.workout_logs.copy()
-        logs.columns = [str(c).lower() for c in logs.columns]
-        
-        # Explicitly force the numeric tracking column to numeric types to prevent picking up dates
-        fat_col = 'fat' if 'fat' in logs.columns else ('raw' if 'raw' in logs.columns else logs.columns[-1])
-        logs[fat_col] = pd.to_numeric(logs[fat_col], errors='coerce')
-        
-        type_col = 'type' if 'type' in logs.columns else ('session_type' if 'session_type' in logs.columns else None)
-
-        if type_col and fat_col:
-            # Grouping the minimum valid decimal numbers
-            fly_df = logs[logs[type_col] == '20m_fly'].groupby('athlete_id')[fat_col].min().rename('best_fly')
-            block_df = logs[logs[type_col] == '30m_block'].groupby('athlete_id')[fat_col].min().rename('best_block')
-        else:
-            fly_df = pd.Series(dtype='float64')
-            block_df = pd.Series(dtype='float64')
-        
-        roster = st.session_state.athletes.copy()
-        roster.columns = [str(c).lower() for c in roster.columns]
-        
-        id_col = 'id' if 'id' in roster.columns else ('athlete_id' if 'athlete_id' in roster.columns else roster.columns[0])
-        
-        if 'name' in roster.columns:
-            name_col = 'name'
-        else:
-            name_candidates = [c for c in roster.columns if 'name' in c]
-            name_col = name_candidates[0] if name_candidates else None
-
-        roster = roster.merge(fly_df, left_on=id_col, right_index=True, how='left')
-        roster = roster.merge(block_df, left_on=id_col, right_index=True, how='left')
-        
-        roster['id'] = roster[id_col]
-        if name_col:
-            roster['name'] = roster[name_col]
-        else:
-            roster['name'] = "Athlete #" + roster['id'].astype(str)
-            
-        valid_pool = roster.dropna(subset=['best_fly']).copy()
-        
-        if len(valid_pool) < 4:
-            st.info("💡 Note: Data-calculated roster pooling requires at least 4 athletes with logged 20m Fly times. Using default varsity blueprint configuration entries below:")
-            relay_lineup = [
-                {"leg": 1, "name": "Jordan Davis", "role": "Starter (Curve Acceleration)", "metric_label": "Best 30m Block", "time": 4.10},
-                {"leg": 2, "name": "Marcus Anderson", "role": "Max Velocity Straight (Extended Distance)", "metric_label": "Best 20m Fly", "time": 1.98},
-                {"leg": 3, "name": "Trey Williams", "role": "Curve Mastery Threshold", "metric_label": "Best 20m Fly", "time": 2.04},
-                {"leg": 4, "name": "Xavier Thomas", "role": "Anchor (Closer)", "metric_label": "Best 20m Fly", "time": 2.10}
-            ]
-        else:
-            # Sort full pool to allocate roles based on tactical track dynamics
-            # 1. Isolate the absolute best block starter for Leg 1
-            best_starter_row = valid_pool.sort_values(by='best_block', ascending=True).iloc[0]
-            starter_id = best_starter_row['id']
-            
-            # 2. Extract remaining pool and sort purely by raw 20m Fly speed (lowest time first)
-            remaining_pool = valid_pool[valid_pool['id'] != starter_id].sort_values(by='best_fly', ascending=True)
-            
-            # TACTICAL ASSIGNMENT RULES:
-            # #1 Flyer goes to Leg 2 (Extended distance straightaway strategy)
-            leg2_row = remaining_pool.iloc[0]
-            # #2 Flyer goes to Leg 4 (The anchor closer)
-            leg4_row = remaining_pool.iloc[1]
-            # #3 Flyer goes to Leg 3 (Curve specialist transition)
-            leg3_row = remaining_pool.iloc[2]
-            
-            relay_lineup = [
-                {
-                    "leg": 1, 
-                    "name": best_starter_row['name'], 
-                    "role": "Starter (Curve Acceleration)", 
-                    "metric_label": "Best 30m Block" if pd.notna(best_starter_row['best_block']) else "Best 20m Fly (Fallback)",
-                    "time": best_starter_row['best_block'] if pd.notna(best_starter_row['best_block']) else best_starter_row['best_fly']
-                },
-                {"leg": 2, "name": leg2_row['name'], "role": "Max Velocity Straight (Extended Distance)", "metric_label": "Best 20m Fly", "time": leg2_row['best_fly']},
-                {"leg": 3, "name": leg3_row['name'], "role": "Curve Mastery Threshold", "metric_label": "Best 20m Fly", "time": leg3_row['best_fly']},
-                {"leg": 4, "name": leg4_row['name'], "role": "Anchor (Closer)", "metric_label": "Best 20m Fly", "time": leg4_row['best_fly']}
-            ]
-
-    # --- UI DISPLAY: THE 4x100M CONFIGURATION GRID ---
-    st.subheader("🏆 Data-Optimized Relay Lineup Order")
+elif app_portal == "🤝 Relay Optimizer Pool": # Fixed routing variable to match your portal state
+    st.title("🏆 Data-Optimized 4x100m Relay Builder")
+    st.markdown("This engine runs algorithmic sorting to map your fastest 4 available athletes into their ideal lane assignments.")
     
-    cols = st.columns(4)
-    for idx, runner in enumerate(relay_lineup):
-        with cols[idx]:
-            st.markdown(f"### **Leg {runner['leg']}**")
-            st.caption(f"🎭 {runner['role']}")
-            with st.container(border=True):
-                st.markdown(f"🏃 **{runner['name']}**")
+    # 1. Guard Rails: Verify Core Data Structures Exist
+    if 'athletes' not in st.session_state or st.session_state.athletes.empty:
+        st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
+    else:
+        # Standardize Roster DataFrame and enforce case-insensitivity
+        roster_clean = st.session_state.athletes.copy()
+        roster_clean.columns = [str(c).lower() for c in roster_clean.columns]
+        
+        # EXPLICIT INACTIVE FILTER: Pull out inactive runners from pool consideration
+        if 'status' in roster_clean.columns:
+            roster_clean = roster_clean[roster_clean['status'].astype(str).str.lower() == 'active']
+            
+        id_key = 'id' if 'id' in roster_clean.columns else roster_clean.columns[0]
+        name_key = 'name' if 'name' in roster_clean.columns else ('full_name' if 'full_name' in roster_clean.columns else roster_clean.columns[1])
+        gender_key = 'gender' if 'gender' in roster_clean.columns else ('sex' if 'sex' in roster_clean.columns else None)
+
+        relay_gender = st.selectbox("Select Target Relay Division Profile:", ["Male", "Female"])
+        
+        # Filter pool down by target gender selection
+        if gender_key:
+            division_pool = roster_clean[roster_clean[gender_key].astype(str).str.lower() == relay_gender.lower()]
+        else:
+            division_pool = roster_clean
+
+        # 2. Compile Active Metrics Securely
+        roster_metrics = []
+        
+        if 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty:
+            logs_clean = st.session_state.workout_logs.copy()
+            logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
+            
+            fat_col = 'fat' if 'fat' in logs_clean.columns else ('raw' if 'raw' in logs_clean.columns else logs_clean.columns[-1])
+            type_col = 'type' if 'type' in logs_clean.columns else ('session_type' if 'session_type' in logs_clean.columns else None)
+            
+            for _, athlete in division_pool.iterrows():
+                ath_id = str(athlete[id_key]).strip()
                 
-                import math
-                val = runner['time']
-                if val is not None and isinstance(val, (int, float)) and not math.isnan(val):
-                    formatted_value = f"{val:.2f}s FAT"
+                # Filter individual best marks
+                b_fly = logs_clean[(logs_clean['athlete_id'].astype(str).str.strip() == ath_id) & (logs_clean[type_col] == "20m_fly")][fat_col].min()
+                b_block = logs_clean[(logs_clean['athlete_id'].astype(str).str.strip() == ath_id) & (logs_clean[type_col] == "30m_block")][fat_col].min()
+                
+                if pd.notna(b_fly) or pd.notna(b_block):
+                    roster_metrics.append({
+                        "id": ath_id, 
+                        "name": athlete[name_key],
+                        "fly": float(b_fly) if pd.notna(b_fly) else 99.0,
+                        "block": float(b_block) if pd.notna(b_block) else 99.0
+                    })
+
+        # 3. Execution Sorting Architecture
+        if len(roster_metrics) >= 4:
+            rdf = pd.DataFrame(roster_metrics)
+            
+            # Leg 1: Block Start Specialist (Lowest 30m block start time value)
+            leg1_runner = rdf.sort_values('block').iloc[0]
+            rdf = rdf[rdf['id'] != leg1_runner['id']]
+            
+            # Leg 2: Direct Straight-Away Flyer (Lowest 20m fly time value remaining)
+            leg2_runner = rdf.sort_values('fly').iloc[0]
+            rdf = rdf[rdf['id'] != leg2_runner['id']]
+            
+            # Leg 4: The Anchor Closer (Fastest remaining top end max velocity)
+            leg4_runner = rdf.sort_values('fly').iloc[0]
+            rdf = rdf[rdf['id'] != leg4_runner['id']]
+            
+            # Leg 3: Curve Transition Master (Next fastest available matrix element)
+            leg3_runner = rdf.iloc[0]
+            
+            # Format clean display times (hiding placeholder 99.0 entries visually)
+            l1_b = f"{leg1_runner['block']:.2f}s" if leg1_runner['block'] != 99.0 else "--"
+            l2_f = f"{leg2_runner['fly']:.2f}s" if leg2_runner['fly'] != 99.0 else "--"
+            l3_f = f"{leg3_runner['fly']:.2f}s" if leg3_runner['fly'] != 99.0 else "--"
+            l4_f = f"{leg4_runner['fly']:.2f}s" if leg4_runner['fly'] != 99.0 else "--"
+
+            # Display assignments onto dashboard metrics card containers
+            st.subheader("⚡ Core Relay Pool Roster Selection Matrix")
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.metric("🏃‍♂️ Leg 1 (Block Starter)", leg1_runner['name'], f"Block: {l1_b}")
+            with c2:
+                st.metric("🏃‍♂️ Leg 2 (Straight Flyer)", leg2_runner['name'], f"Fly: {l2_f}")
+            with c3:
+                st.metric("🏃‍♂️ Leg 3 (Curve Specialist)", leg3_runner['name'], f"Fly: {l3_f}")
+            with c4:
+                st.metric("🏃‍♂️ Leg 4 (Anchor Closer)", leg4_runner['name'], f"Fly: {l4_f}")
+            
+            # 4. Automatically compute exchange acceleration zone mark patterns
+            st.write("---")
+            st.subheader("🎯 AUTOMATED EXCHANGE ZONE MARK STEPS")
+            
+            # Local mathematical fallback solver rules if function scope is unassigned
+            def get_go_mark(fly_val, block_val):
+                if 'calculate_relay_go_mark' in globals():
+                    return calculate_relay_go_mark(fly_val, block_val)
                 else:
-                    formatted_value = "--"
-                
-                st.metric(label=runner['metric_label'], value=formatted_value)
+                    # Clean traditional kinematically scaled rule-of-thumb stride formula fallback
+                    f = fly_val if fly_val != 99.0 else 2.20
+                    b = block_val if block_val != 99.0 else 4.20
+                    return int(round((b - f) * 4.5 + 17))
 
-    st.write("---")
-    st.subheader("📏 Exchange Zone Go-Mark Target Analysis")
-
-    # --- MATHEMATICAL ENGINE: DYNAMIC KINEMATIC GO-MARK GENERATION ---
-    def calculate_go_mark(incoming_fly, outgoing_accel_time):
-        """
-        Calculates relay go-marks based on your precise kinematic specifications:
-        1. V_incoming = 20 / incoming_fly
-        2. T_acceleration = outgoing_accel_time * 0.71
-        3. Remainder = (V_incoming * T_acceleration) - 20m
-        4. Steps = Remainder * 3.28 Step Factor
-        5. Subtract arms reach adjustments dynamically to fit coaching bounds
-        """
-        import math
-        
-        def to_float(val):
-            if val is None or (isinstance(val, float) and math.isnan(val)): return None
-            try: return float(val)
-            except: return None
-
-        t_inc = to_float(incoming_fly)
-        t_out = to_float(outgoing_accel_time)
-
-        if not t_inc or not t_out or t_inc == 0:
-            return 19.5 # Standard fallback
-        
-        # Calculate incoming velocity (m/s)
-        v_incoming = 20.0 / t_inc
-        
-        # If outgoing runner metric passed is a short fly instead of a full block, scale it
-        actual_block_time = t_out if t_out > 3.0 else (t_out * 1.95)
-        t_acceleration = actual_block_time * 0.71
-        
-        # Run differential positioning formula
-        total_incoming_dist = v_incoming * t_acceleration
-        remainder_dist = total_incoming_dist - 20.0
-        raw_steps = remainder_dist * 3.28
-        
-        # Reach buffer normalization step
-        if t_inc <= 2.35:
-            final_steps = raw_steps - 3.6  # Elite Varsity Tier Adjustment
-        else:
-            final_steps = raw_steps - 7.5  # Developing / JV Tier Adjustment
+            mark_1to2 = get_go_mark(leg1_runner['fly'], leg2_runner['block'])
+            mark_2to3 = get_go_mark(leg2_runner['fly'], leg3_runner['block'])
+            mark_3to4 = get_go_mark(leg3_runner['fly'], leg4_runner['block'])
             
-        return max(8.0, min(26.0, round(final_steps, 1)))
-
-    # --- VARIABLE ALIGNMENT FOR THE THREE PASSING EXCHANGES ---
-    # Exchange 1: Incoming Leg 1 Fly Time -> Outgoing Leg 2 Metric
-    if 'valid_pool' in locals() and not valid_pool.empty:
-        l1_fly = valid_pool.loc[valid_pool['name'] == relay_lineup[0]['name'], 'best_fly'].values
-        t1_fly = l1_fly[0] if len(l1_fly) > 0 and pd.notna(l1_fly[0]) else 2.15
-    else:
-        t1_fly = 2.15
-
-    t2_val = relay_lineup[1]['time']
-    exch1_steps = calculate_go_mark(t1_fly, t2_val)
-
-    # Exchange 2: Incoming Leg 2 (20m Fly) -> Outgoing Leg 3 Metric
-    t2_fly = relay_lineup[1]['time']
-    t3_val = relay_lineup[2]['time']
-    exch2_steps = calculate_go_mark(t2_fly, t3_val)
-
-    # Exchange 3: Incoming Leg 3 (20m Fly) -> Outgoing Leg 4 Metric
-    t3_fly = relay_lineup[2]['time']
-    t4_val = relay_lineup[3]['time']
-    exch3_steps = calculate_go_mark(t3_fly, t4_val)
-
-    # --- UI DISPLAY RENDERING ---
-    e1, e2, e3 = st.columns(3)
-    
-    with e1:
-        with st.container(border=True):
-            st.markdown("### 🪵 Exchange 1")
-            st.caption(f"Leg 1 ({relay_lineup[0]['name']}) ➔ Leg 2 ({relay_lineup[1]['name']})")
-            st.markdown(f"## 🏁 **{exch1_steps} STEPS**")
-            st.info("📍 Place tape backward from the start of the acceleration zone index.")
-
-    with e2:
-        with st.container(border=True):
-            st.markdown("### 🪵 Exchange 2")
-            st.caption(f"Leg 2 ({relay_lineup[1]['name']}) ➔ Leg 3 ({relay_lineup[2]['name']})")
-            st.markdown(f"## 🏁 **{exch2_steps} STEPS**")
-            st.info("📍 Place tape backward from the start of the acceleration zone index.")
-
-    with e3:
-        with st.container(border=True):
-            st.markdown("### 🪵 Exchange 3")
-            st.caption(f"Leg 3 ({relay_lineup[2]['name']}) ➔ Leg 4 ({relay_lineup[3]['name']})")
-            st.markdown(f"## 🏁 **{exch3_steps} STEPS**")
-            st.info("📍 Place tape backward from the start of the acceleration zone index.")
+            st.markdown(f"""
+            * **Exchange 1 (Leg 1 to Leg 2):** Count out exactly `{mark_1to2} footsteps` backward from the apex checkmark point.
+            * **Exchange 2 (Leg 2 to Leg 3):** Count out exactly `{mark_2to3} footsteps` backward from the apex checkmark point.
+            * **Exchange 3 (Leg 3 to Leg 4):** Count out exactly `{mark_3to4} footsteps` backward from the apex checkmark point.
+            """)
+        else:
+            st.warning("⚠️ The active roster requires at least 4 registered athletes of this gender segment with documented sprint metrics to optimize line-up configurations.")
 
 # ==========================================
 # MODULE 6: AD REPORT EXPORT ("THE AD CLOSER")
