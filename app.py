@@ -975,162 +975,165 @@ elif app_portal == "🤝 Relay Optimizer Pool":
             st.warning("⚠️ The active roster requires at least 4 registered athletes of this gender segment with documented sprint metrics to optimize line-up configurations.")
 
 # ==========================================
-# MODULE 6: AD REPORT EXPORT ("THE AD CLOSER")
+# MODULE: AD REPORT EXPORT
 # ==========================================
 elif app_portal == "📄 AD Report Export":
-    import io
-    from datetime import datetime  # FIX: Added missing import to resolve NameError
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib import colors
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-
     st.title("📄 Executive AD Report Generator")
-    st.subheader("Generate Data-Driven Program Justification Printouts")
-    
-    st.info("💡 **Print-Optimized Formatting:** This engine builds a high-contrast, monochrome PDF designed perfectly for standard office printers, bulletin boards, and athletic department budget reviews.")
+    st.markdown("Generate and export production-ready performance summary briefs for athletic administration.")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        coach_name = st.text_input("Head Coach Name:", value="John Doe")
-        program_name = st.text_input("Program Title:", value="NORTHSIDE TRACK & FIELD")
-    with col2:
-        squad_division = st.selectbox("Squad/Division Filter:", ["VARSITY BOYS", "VARSITY GIRLS", "FROSH-SOPH"])
-        state_qual_time = st.number_input("State Qual 100m Benchmark (s):", value=11.00, step=0.05)
+    # 1. Top-Level Report Configuration Controls
+    c_col1, c_col2 = st.columns(2)
+    with c_col1:
+        head_coach = st.text_input("Report Head Coach Sign-off:", value="John Doe")
+    with c_col2:
+        squad_filter = st.selectbox("Filter Report Squad View:", ["All Active", "Varsity", "JV / Developing"])
 
     st.write("---")
 
-    def generate_ad_pdf(coach, program, squad, benchmark):
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer, 
-            pagesize=letter,
-            rightMargin=36, leftMargin=36, 
-            topMargin=36, bottomMargin=36
-        )
+    # 2. Safety Guardrails: Check if data streams exist
+    if 'athletes' not in st.session_state or st.session_state.athletes.empty:
+        st.info("ℹ️ No roster records available to generate report. Onboard athletes first.")
+    else:
+        # Standardize roster tracking views
+        roster_clean = st.session_state.athletes.copy()
+        roster_clean.columns = [str(c).lower().strip() for c in roster_clean.columns]
         
-        styles = getSampleStyleSheet()
+        # Filter down to Active athletes exclusively
+        active_roster = roster_clean[roster_clean['status'].astype(str).str.lower() == 'active']
         
-        title_style = ParagraphStyle(
-            'PDFTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=16, leading=20, textColor=colors.black
-        )
-        meta_style = ParagraphStyle(
-            'PDFMeta', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=14, textColor=colors.HexColor("#444444")
-        )
-        section_style = ParagraphStyle(
-            'PDFSection', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=12, leading=16, spaceBefore=10, spaceAfter=6, textColor=colors.black
-        )
-        bullet_style = ParagraphStyle(
-            'PDFBullet', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=15, leftIndent=15
-        )
-        table_hdr_style = ParagraphStyle(
-            'PDFTableHdr', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=colors.black
-        )
-        table_body_style = ParagraphStyle(
-            'PDFTableBody', parent=styles['Normal'], fontName='Helvetica', fontSize=9
-        )
+        # Apply tier filtering selection dynamically
+        if squad_filter != "All Active":
+            active_roster = active_roster[active_roster['tier'].astype(str).str.lower() == squad_filter.lower()]
 
-        story = []
+        # 3. Dynamic Aggregation Engine
+        report_rows = []
+        total_deltas = 0.0
+        delta_count = 0
+        velocity_sums = 0.0
+        velocity_count = 0
 
-        story.append(Paragraph(f"■ {program.upper()} — 2026 SEASON SPEED REPORT", title_style))
-        current_date = datetime.today().strftime('%B %d, %Y')
-        story.append(Paragraph(f"Report Generated: {current_date} &nbsp;|&nbsp; Head Coach: {coach}", meta_style))
-        story.append(Spacer(1, 10))
-        story.append(HRFlowable(width="100%", thickness=1.5, color=colors.black, spaceBefore=1, spaceAfter=15))
+        # Load workout logs safely if available
+        has_logs = 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty
+        if has_logs:
+            logs_clean = st.session_state.workout_logs.copy()
+            logs_clean.columns = [str(c).lower().strip() for c in logs_clean.columns]
+            logs_clean['athlete_id'] = logs_clean['athlete_id'].astype(str).str.strip()
+            logs_clean['fat'] = pd.to_numeric(logs_clean['fat'], errors='coerce')
+            logs_clean['proj_100'] = pd.to_numeric(logs_clean['proj_100'], errors='coerce')
 
-        story.append(Paragraph(f"[ SQUAD OVERVIEW: {squad} ]", section_style))
-        story.append(Paragraph("• Total Active Student-Athletes Tracked: <b>7</b>", bullet_style))
-        story.append(Paragraph("• Avg. 20m Fly Block Performance Improvement: <b>-0.18s</b>", bullet_style))
-        story.append(Paragraph("• Team Speed Peak Velocity Aggregate: <b>9.85 m/s (Average)</b>", bullet_style))
-        story.append(Spacer(1, 15))
+        # Compute profiles per athlete
+        for _, athlete in active_roster.iterrows():
+            a_id = str(athlete['id']).strip()
+            a_name = str(athlete['name']).strip()
+            
+            baseline_fly = "--"
+            current_pr = "--"
+            net_delta = "--"
+            proj_100 = "--"
+            is_qualifier = False
+            
+            if has_logs:
+                # Isolate 20m Fly intervals for baseline tracking comparisons
+                athlete_fly_logs = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '20m_fly')]
+                
+                if not athlete_fly_logs.empty:
+                    # Chronological Baseline: Earliest logged entry
+                    base_fat = float(athlete_fly_logs.iloc[0]['fat'])
+                    baseline_fly = f"{base_fat:.2f}s FAT"
+                    
+                    # Current PR: All-time record minimum score
+                    pr_fat = float(athlete_fly_logs['fat'].min())
+                    current_pr = f"{pr_fat:.2f}s FAT"
+                    
+                    # Net Performance Variance Delta
+                    delta_val = pr_fat - base_fat
+                    net_delta = f"{delta_val:+.2f}s" if delta_val != 0 else "0.00s"
+                    
+                    total_deltas += delta_val
+                    delta_count += 1
+                    
+                    # Calculate real-world running velocity in meters per second: (v = d / t)
+                    if pr_fat > 0:
+                        velocity_sums += (20.0 / pr_fat)
+                        velocity_count += 1
+                    
+                    # Projected 100 Meter Dashboard Targets
+                    best_record = athlete_fly_logs[athlete_fly_logs['fat'] == pr_fat].iloc[0]
+                    proj_val = float(best_record['proj_100'])
+                    proj_100 = f"{proj_val:.2f}s"
+                    
+                    # Tag State Standards Check (Projected sub 11.00s)
+                    if proj_val <= 11.00:
+                        is_qualifier = True
+            
+            report_rows.append({
+                "name": a_name,
+                "baseline": baseline_fly,
+                "pr": current_pr,
+                "delta": net_delta,
+                "proj": proj_100,
+                "star": " *" if is_qualifier else ""
+            })
 
-        story.append(Paragraph("■ PERFORMANCE ROSTER & 100M PROJECTED RANKINGS", section_style))
-        
-        table_data = [
-            [Paragraph("<b>Athlete Name</b>", table_hdr_style), Paragraph("<b>Baseline Fly</b>", table_hdr_style), Paragraph("<b>Current PR</b>", table_hdr_style), Paragraph("<b>Net Delta</b>", table_hdr_style), Paragraph("<b>Proj. 100m</b>", table_hdr_style)],
-            [Paragraph("Anderson, Marcus", table_body_style), Paragraph("2.25s FAT", table_body_style), Paragraph("1.98s FAT", table_body_style), Paragraph("-0.27s", table_body_style), Paragraph("10.95s *", table_body_style)],
-            [Paragraph("Williams, Trey", table_body_style), Paragraph("2.18s FAT", table_body_style), Paragraph("2.04s FAT", table_body_style), Paragraph("-0.14s", table_body_style), Paragraph("11.25s", table_body_style)],
-            [Paragraph("Thomas, Xavier", table_body_style), Paragraph("2.30s FAT", table_body_style), Paragraph("2.10s FAT", table_body_style), Paragraph("-0.20s", table_body_style), Paragraph("11.55s", table_body_style)],
-            [Paragraph("Davis, Jordan", table_body_style), Paragraph("2.40s FAT", table_body_style), Paragraph("2.15s FAT", table_body_style), Paragraph("-0.25s", table_body_style), Paragraph("11.75s", table_body_style)],
-        ]
-        
-        col_widths = [2.25*inch, 1.25*inch, 1.25*inch, 1.0*inch, 1.25*inch]
-        roster_table = Table(table_data, colWidths=col_widths)
-        roster_table.setStyle(TableStyle([
-            ('LINEBELOW', (0,0), (-1,0), 1.5, colors.black),
-            ('BOTTOMPADDING', (0,0), (-1,0), 5),
-            ('TOPPADDING', (0,1), (-1,-1), 4),
-            ('BOTTOMPADDING', (0,1), (-1,-1), 4),
-            ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.HexColor("#DDDDDD")),
-        ]))
-        story.append(roster_table)
-        story.append(Spacer(1, 5))
-        story.append(Paragraph(f"<i>* Denotes State Qualifying standard projected ({benchmark:.2f}s)</i>", meta_style))
-        story.append(Spacer(1, 15))
+        # Final Summary Metric Reductions
+        avg_improvement = f"{total_deltas / delta_count:+.2f}s" if delta_count > 0 else "0.00s"
+        avg_velocity = f"{velocity_sums / velocity_count:.2f} m/s" if velocity_count > 0 else "-- m/s"
+        total_tracked_count = len(active_roster)
 
-        story.append(Paragraph("■ PROPOSED 4x100M RELAY LINEUP (DATA-OPTIMIZED)", section_style))
-        story.append(Paragraph("• <b>Leg 1 (Starter):</b> Jordan Davis &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[Fastest 30m Block Start: 4.10s]", bullet_style))
-        story.append(Paragraph("• <b>Leg 2 (Straight):</b> Marcus Anderson [Fastest 20m Flying Fly: 1.98s]", bullet_style))
-        story.append(Paragraph("• <b>Leg 3 (Curve):</b> &nbsp;&nbsp;&nbsp;Trey Williams &nbsp;&nbsp;&nbsp;&nbsp;[Strong Speed Endurance Threshold]", bullet_style))
-        story.append(Paragraph("• <b>Leg 4 (Anchor):</b> &nbsp;&nbsp;Xavier Thomas &nbsp;&nbsp;&nbsp;[Closer / Competitor Peak Acceleration]", bullet_style))
+        # 4. Render Layout Panel Output
+        st.subheader("📋 Document Preview Panel")
         
-        story.append(Spacer(1, 8))
-        story.append(Paragraph("■ <b>RECOMMENDED RELAY GO MARKS:</b>", section_style))
-        story.append(Paragraph("- Exch 1 (1 to 2): 19.5 Steps &nbsp;|&nbsp; Exch 2 (2 to 3): 18.0 Steps &nbsp;|&nbsp; Exch 3 (3 to 4): 21.0 Steps", bullet_style))
-        
-        story.append(Spacer(1, 40))
-        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#999999"), spaceBefore=10, spaceAfter=10))
-        story.append(Paragraph("<b>Verified By:</b> RDZ Speed Intelligence System Dashboard", meta_style))
-        story.append(Paragraph("<i>This document contains certified high-precision metrics compiled for athletic recruitment evaluation and administrative review.</i>", meta_style))
+        # Outer stylized document wrapper container box
+        st.markdown(f"""
+        <div style="border: 2px solid #2d3139; padding: 24px; border-radius: 8px; background-color: #0e1117; font-family: monospace;">
+            <h3 style="margin-top: 0px; color: #ffffff; letter-spacing: 0.5px;">■ NORTHSIDE TRACK & FIELD — 2026 SEASON SPEED REPORT</h3>
+            <p style="color: #a3a8b4; font-size: 13px; margin-bottom: 25px;">
+                Report Generated: {datetime.today().strftime('%B %d, %Y')} | Head Coach: {head_coach}
+            </p>
+            
+            <p style="font-weight: bold; color: #ffffff; margin-bottom: 8px; text-transform: uppercase;">
+                [ SQUAD OVERVIEW: {squad_filter} ]
+            </p>
+            <p style="color: #e2e8f0; font-size: 14px; line-height: 1.6; margin-bottom: 30px;">
+                • Total Active Student-Athletes Tracked: <b>{total_tracked_count}</b><br>
+                • Avg. 20m Fly Block Performance Improvement: <span style="color:#00E676; font-weight:bold;">{avg_improvement}</span><br>
+                • Team Speed Peak Velocity Aggregate: <b>{avg_velocity} (Average)</b>
+            </p>
+            
+            <h4 style="color: #ffffff; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">■ PERFORMANCE ROSTER & 100M PROJECTED RANKINGS</h4>
+        </div>
+        """, unsafe_allow_html=True)
 
-        doc.build(story)
-        buffer.seek(0)
-        return buffer
+        # Grid Table Render Execution Loop
+        t_col1, t_col2, t_col3, t_col4, t_col5 = st.columns([3, 2, 2, 2, 2])
+        with t_col1: st.markdown("<span style='color:#888; font-size:12px;'>Athlete Name</span>", unsafe_allow_html=True)
+        with t_col2: st.markdown("<span style='color:#888; font-size:12px;'>Baseline Fly</span>", unsafe_allow_html=True)
+        with t_col3: st.markdown("<span style='color:#888; font-size:12px;'>Current PR</span>", unsafe_allow_html=True)
+        with t_col4: st.markdown("<span style='color:#888; font-size:12px;'>Net Delta</span>", unsafe_allow_html=True)
+        with t_col5: st.markdown("<span style='color:#888; font-size:12px;'>Proj. 100m</span>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin: 4px 0px 12px 0px; border-color: #333;' />", unsafe_allow_html=True)
 
-    pdf_data = generate_ad_pdf(coach_name, program_name, squad_division, state_qual_time)
-
-    st.markdown("### 📋 Document Preview Panel")
-    with st.container(border=True):
-        st.markdown(f"### ■ {program_name.upper()} — 2026 SEASON SPEED REPORT")
-        current_date_str = datetime.today().strftime('%B %d, %Y')
-        st.caption(f"Report Generated: {current_date_str} | Head Coach: {coach_name}")
-        st.write("")
-        
-        st.markdown(f"**[ SQUAD OVERVIEW: {squad_division} ]**")
-        st.markdown("• Total Active Student-Athletes Tracked: **7** \n• Avg. 20m Fly Block Performance Improvement: **-0.18s** \n• Team Speed Peak Velocity Aggregate: **9.85 m/s (Average)**")
-        st.write("")
-        
-        st.markdown("### ■ PERFORMANCE ROSTER & 100M PROJECTED RANKINGS")
-        st.dataframe(pd.DataFrame([
-            {"Athlete Name": "Anderson, Marcus", "Baseline Fly": "2.25s FAT", "Current PR": "1.98s FAT", "Net Delta": "-0.27s", "Proj. 100m": "10.95s *"},
-            {"Athlete Name": "Williams, Trey", "Baseline Fly": "2.18s FAT", "Current PR": "2.04s FAT", "Net Delta": "-0.14s", "Proj. 100m": "11.25s"},
-            {"Athlete Name": "Thomas, Xavier", "Baseline Fly": "2.30s FAT", "Current PR": "2.10s FAT", "Net Delta": "-0.20s", "Proj. 100m": "11.55s"},
-            {"Athlete Name": "Davis, Jordan", "Baseline Fly": "2.40s FAT", "Current PR": "2.15s FAT", "Net Delta": "-0.25s", "Proj. 100m": "11.75s"}
-        ]), hide_index=True, use_container_width=True)
-        st.caption(f"* Denotes State Qualifying standard projected ({state_qual_time:.2f}s)")
-        st.write("")
-        
-        st.markdown("### ■ PROPOSED 4x100M RELAY LINEUP (DATA-OPTIMIZED)")
-        st.markdown("• **Leg 1 (Starter):** Jordan Davis [Fastest 30m Block Start: 4.10s]  \n• **Leg 2 (Straight):** Marcus Anderson [Fastest 20m Flying Fly: 1.98s]  \n• **Leg 3 (Curve):** Trey Williams [Strong Speed Endurance Threshold]  \n• **Leg 4 (Anchor):** Xavier Thomas [Closer / Competitor Peak Acceleration]")
-        st.write("")
-        
-        st.markdown("### ■ RECOMMENDED RELAY GO MARKS:")
-        st.markdown("- Exch 1 (1 to 2): **19.5 Steps** | Exch 2 (2 to 3): **18.0 Steps** | Exch 3 (3 to 4): **21.0 Steps**")
-        st.write("---")
-        
-        st.caption("**Verified By:** RDZ Speed Intelligence System Dashboard")
-        st.caption("*This document contains certified high-precision metrics compiled for athletic recruitment evaluation and administrative review.*")
-
-    st.write("")
-    st.download_button(
-        label="📄 Generate & Download Coach's Report",
-        data=pdf_data,
-        file_name=f"{squad_division.lower().replace(' ', '_')}_speed_report.pdf",
-        mime="application/pdf",
-        use_container_width=True
-    )
-
+        if not report_rows:
+            st.info("No active athletes match this specific squad profile view configuration selection.")
+        else:
+            for r in report_rows:
+                r1, r2, r3, r4, r5 = st.columns([3, 2, 2, 2, 2])
+                with r1: st.markdown(f"**{r['name']}**")
+                with r2: st.markdown(f"<span style='color:#a3a8b4;'>{r['baseline']}</span>", unsafe_allow_html=True)
+                with r3: st.markdown(f"<span style='color:#ffffff;'>{r['pr']}</span>", unsafe_allow_html=True)
+                
+                # Colorize positive vs negative delta drops logically
+                with r4: 
+                    if "-" in r['delta']:
+                        st.markdown(f"<span style='color:#00E676;'>{r['delta']}</span>", unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"<span>{r['delta']}</span>", unsafe_allow_html=True)
+                        
+                with r5: st.markdown(f"**{r['proj']}**<span style='color:#FF4B4B;'>{r['star']}</span>", unsafe_allow_html=True)
+                st.markdown("<hr style='margin: 4px 0px 8px 0px; border-color: #222;' />", unsafe_allow_html=True)
+                
+            st.markdown("<p style='color:#888; font-size:12px; margin-top:10px;'>• Denotes State Qualifying standard projected (11.00s)</p>", unsafe_allow_html=True)
+            
 # ==========================================
 # MODULE: WORKOUT TRACKER
 # ==========================================
