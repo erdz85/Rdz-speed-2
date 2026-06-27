@@ -5,7 +5,53 @@ import plotly.express as px
 import qrcode
 import io
 from datetime import datetime
+import streamlit as pd
+import pandas as pd
+from datetime import datetime
 
+# Configure main Streamlit page settings
+st.set_page_config(
+    page_title="High-Performance Sprint Analytics",
+    page_icon="⚡",
+    layout="wide"
+)
+
+# ==========================================
+# GLOBAL APP STATE INITIALIZATION
+# ==========================================
+
+# 1. Initialize Roster Database if empty
+if 'athletes' not in st.session_state:
+    st.session_state.athletes = pd.DataFrame(columns=[
+        'id', 'full_name', 'grade', 'group', 'tier', 'gender'
+    ])
+
+# 2. Initialize Workout Performance Logs if empty
+if 'workout_logs' not in st.session_state:
+    st.session_state.workout_logs = pd.DataFrame(columns=[
+        'log_id', 'date', 'athlete_id', 'type', 'raw', 'fat', 'proj_100'
+    ])
+
+# ==========================================
+# GLOBAL CORE KINEMATIC UTILITIES
+# ==========================================
+
+def normalize_hand_fly(hand_time: float) -> float:
+    """Applies standard electronic/FAT conversion factor to manual stopwatch times."""
+    return round(hand_time + 0.24, 2)
+
+def calculate_projected_100m(block_time: float, fly_time: float, gender: str) -> float:
+    """
+    Predicts 100m FAT time using a multi-variable kinematic projection model.
+    Accounts for gender-specific maximum velocity decay rates.
+    """
+    gender_clean = str(gender).lower()
+    if 'female' in gender_clean:
+        # Curve modeling formula optimized for female sprint acceleration profiles
+        return round((fly_time * 5.10) + (block_time * 0.25) + 1.40, 2)
+    else:
+        # Curve modeling formula optimized for male sprint acceleration profiles
+        return round((fly_time * 4.95) + (block_time * 0.22) + 1.20, 2)
 # ==========================================
 # 1. APP CONFIGURATION & STYLE SETUP
 # ==========================================
