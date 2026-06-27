@@ -90,19 +90,113 @@ if "active_athlete_input_id" not in st.session_state: st.session_state.active_at
 
 
 # ==========================================
-# 3. GLOBAL MATHEMATICAL COMPUTATION ENGINE
+# 3. MATHEMATICAL CALCULATION CORES
 # ==========================================
+
+def calculate_relay_go_mark(inc_fly, out_block):
+    """
+    Calculates the acceleration zone go-mark distance in footsteps.
+    Guards against unrecorded placeholder times (99.0).
+    """
+    try:
+        inc_fly = float(inc_fly)
+        out_block = float(out_block)
+        
+        # SAFETY GUARD: If either runner lacks data, return standard default footsteps
+        if inc_fly >= 99.0 or out_block >= 99.0 or inc_fly <= 0 or out_block <= 0:
+            return 18.0  
+            
+        raw_mark = (out_block - inc_fly) * 7.5
+        return float(max(1.0, round(raw_mark, 1)))
+    except:
+        return 18.0
+
+
+def calculate_precise_100m(thirty_block, twenty_fly, gender, is_hand_timed=False):
+    """
+    Calculates 100m performance predictions using a piecewise velocity splicing model.
+    Includes automated fallback handling and performance-tiered speed endurance decay constants.
+    """
+    import pandas as pd
+    
+    if twenty_fly is None or pd.isna(twenty_fly):
+        return None
+        
+    try:
+        twenty_fly = float(twenty_fly)
+        if twenty_fly <= 0 or twenty_fly >= 99.0:
+            return None
+    except:
+        return None
+        
+    try:
+        if thirty_block is not None and not pd.isna(thirty_block):
+            thirty_block = float(thirty_block)
+            if thirty_block <= 0 or thirty_block >= 99.0:
+                thirty_block = None
+        else:
+            thirty_block = None
+    except:
+        thirty_block = None
+    
+    # Adjust for manual stopwatch variations to match FAT parameters
+    if is_hand_timed:
+        twenty_fly += 0.15
+        if thirty_block is not None:
+            thirty_block += 0.24
+
+    # --- FALLBACK MODEL: Fly-Only Calculation ---
+    if thirty_block is None:
+        ten_split = twenty_fly / 2.0
+        if str(gender).lower() == "male":
+            return round((ten_split * 10) + 1.05, 2)
+        else:
+            return round((ten_split * 10) + 1.15, 2)
+
+    # --- CORE MODEL: Dual-Input Piecewise Splicing Formula ---
+    ten_split = twenty_fly / 2.0
+    base_time = thirty_block + (7.0 * ten_split)
+    
+    if str(gender).lower() == "male":
+        decay = 0.12 if base_time < 11.0 else 0.18
+    else:
+        decay = 0.15 if base_time < 12.2 else 0.25
+            
+    return round(base_time + decay, 2)
+
+
+# ==========================================
+# BACKWARD COMPATIBILITY LAYER FOR OTHER MODULES
+# ==========================================
+
 def get_best_historical_fat(athlete_id, run_type="20m_fly"):
-    logs = st.session_state.workout_logs[(st.session_state.workout_logs["athlete_id"] == athlete_id) & (st.session_state.workout_logs["type"] == run_type)]
-    if logs.empty: return float('inf')
-    return logs["normalized_fat_time"].min()
+    """
+    Finds the historical PR for an athlete while safeguarding against column case variations.
+    """
+    import pandas as pd
+    if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
+        return float('inf')
+        
+    logs = st.session_state.workout_logs.copy()
+    logs.columns = [str(c).lower() for c in logs.columns]
+    
+    fat_col = 'normalized_fat_time' if 'normalized_fat_time' in logs.columns else ('fat' if 'fat' in logs.columns else logs.columns[-1])
+    type_col = 'type' if 'type' in logs.columns else ('session_type' if 'session_type' in logs.columns else logs.columns[-2])
+    
+    filtered = logs[(logs["athlete_id"].astype(str).str.strip() == str(athlete_id).strip()) & (logs[type_col] == run_type)]
+    if filtered.empty: 
+        return float('inf')
+        
+    return pd.to_numeric(filtered[fat_col], errors='coerce').min()
+
 
 def project_100m_dash(fat_time, gender):
-    if not fat_time or fat_time == 0: return 0.0
-    ten_split = fat_time / 2.0
-    base = fat_time + (7.0 * ten_split)
-    decay = 0.12 if str(gender).lower() == "male" else 0.15
-    return round(base + decay, 2)
+    """
+    Points legacy page references directly into the updated precision engine.
+    """
+    if not fat_time or fat_time == 0 or fat_time >= 99.0:
+        return 0.0
+    return calculate_precise_100m(thirty_block=None, twenty_fly=fat_time, gender=gender)
 
 
 # ==========================================
