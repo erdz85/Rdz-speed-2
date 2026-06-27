@@ -277,41 +277,6 @@ def project_100m_dash(fat_time, gender):
 
 
 # ==========================================
-# BACKWARD COMPATIBILITY LAYER FOR OTHER MODULES
-# ==========================================
-
-def get_best_historical_fat(athlete_id, run_type="20m_fly"):
-    """
-    Finds the historical PR for an athlete while safeguarding against column case variations.
-    """
-    import pandas as pd
-    import streamlit as st
-    
-    if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
-        return float('inf')
-        
-    logs = st.session_state.workout_logs.copy()
-    logs.columns = [str(c).lower() for c in logs.columns]
-    
-    fat_col = 'normalized_fat_time' if 'normalized_fat_time' in logs.columns else ('fat' if 'fat' in logs.columns else logs.columns[-1])
-    type_col = 'type' if 'type' in logs.columns else ('session_type' if 'session_type' in logs.columns else logs.columns[-2])
-    
-    filtered = logs[(logs["athlete_id"].astype(str).str.strip() == str(athlete_id).strip()) & (logs[type_col] == run_type)]
-    if filtered.empty: 
-        return float('inf')
-        
-    return pd.to_numeric(filtered[fat_col], errors='coerce').min()
-
-
-def project_100m_dash(fat_time, gender):
-    """
-    Points legacy page references directly into the updated precision engine.
-    """
-    if not fat_time or fat_time == 0 or fat_time >= 99.0:
-        return 0.0
-    return calculate_precise_100m(thirty_block=None, twenty_fly=fat_time, gender=gender)
-
-# ==========================================
 # 4. GLOBAL NAVIGATION AND CONTROL ROUTER
 # ==========================================
 st.sidebar.title("⚡ RDZ Navigation")
