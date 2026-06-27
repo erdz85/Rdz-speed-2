@@ -469,8 +469,26 @@ if app_portal == "👥 Roster & Onboarding Hub":
 elif app_portal == "⏱️ Workout Tracker":
     st.title("⏱️ Unified Workout Hub")
     tab1, tab2 = st.tabs(["🆕 Log New Reps", "📊 History & Stats"])
+    # 1. Prepare historical PR lookups BEFORE the tabs
+    history_fly = {}
+    history_block = {}
+    
+    if 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty:
+        logs_clean = st.session_state.workout_logs.copy()
+        logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
+        
+        # Ensure 'fat' exists for lookup
+        fat_col = 'fat' if 'fat' in logs_clean.columns else logs_clean.columns[-2]
+        
+        history_fly = logs_clean[logs_clean['type'] == '20m_fly'].groupby('athlete_id')[fat_col].min().to_dict()
+        history_block = logs_clean[logs_clean['type'] == '30m_block'].groupby('athlete_id')[fat_col].min().to_dict()
+
+    # 2. Now initialize the Tabs
+    tab1, tab2 = st.tabs(["🆕 Log New Reps", "📊 History & Stats"])
     
     with tab1:
+        # Now your row-rendering loop will work because history_fly exists!
+        ...
         # 1. Configuration Controls
         col_sys, col_drill = st.columns(2)
         with col_sys:
