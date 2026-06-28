@@ -1,9 +1,10 @@
-if 'workout_logs' not in st.session_state:
-    st.session_state.workout_logs = pd.DataFrame(columns=['id', 'log_id', 'date', 'type', 'fat', 'proj_100'])
 import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
+
+if 'workout_logs' not in st.session_state:
+    st.session_state.workout_logs = pd.DataFrame(columns=['id', 'log_id', 'date', 'type', 'fat', 'proj_100'])  
     
 def get_unified_projection(session_type, fat_time, block_val, fly_val, gender):
     """
