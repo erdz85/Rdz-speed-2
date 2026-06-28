@@ -243,7 +243,10 @@ elif app_portal == "📆 Live Session Dashboard":
                 if not st.session_state.athletes[st.session_state.athletes['id'] == x].empty else "Unknown"
             )
             st.table(display_df[['Name', 'type', 'fat', 'proj_100']])
-
+# At the very bottom of each module block
+if st.button("💾 Save " + app_portal):
+    save_data()
+    st.success("Saved!")
 # ==========================================
 # MODULE 4: RELAY OPTIMIZER POOL
 # ==========================================
@@ -332,6 +335,10 @@ elif app_portal == "🤝 Relay Optimizer Pool":
                     file_name="relay_lineup.pdf",
                     mime="application/pdf"
                 )
+# At the very bottom of each module block
+if st.button("💾 Save " + app_portal):
+    save_data()
+    st.success("Saved!")
 # ==========================================
 # MODULE 5: ATHLETE PROGRESS & PR MANAGEMENT
 # ==========================================
@@ -398,7 +405,10 @@ elif app_portal == "📈 Athlete Progress Trends":
                 st.write("• Optimal Relay Leg: Leg 1 or Leg 3 (Acceleration Focus)")
         else:
             st.info("Log training data to view progress trends.")
-            
+# At the very bottom of each module block
+if st.button("💾 Save " + app_portal):
+    save_data()
+    st.success("Saved!")
 # ==========================================
 # MODULE 6: COMPREHENSIVE TEAM LEADERBOARD
 # ==========================================
@@ -438,7 +448,10 @@ elif app_portal == "🏆 Team Leaderboards":
     with tab3:
         st.subheader("Official Meet PRs")
         st.table(df.sort_values("Official 100m")[['Name', 'Official 100m', 'Official 200m']])
-
+# At the very bottom of each module block
+if st.button("💾 Save " + app_portal):
+    save_data()
+    st.success("Saved!")
 # ==========================================
 # MODULE 7: EXECUTIVE AD REPORT GENERATOR
 # ==========================================
@@ -484,7 +497,10 @@ elif app_portal == "📋 Executive AD Report":
                 st.table(top[['Name', m]])
             else:
                 st.write("No data recorded.")
-
+# At the very bottom of each module block
+if st.button("💾 Save " + app_portal):
+    save_data()
+    st.success("Saved!")
 # ==========================================
 # FOOTER / PERSISTENCE
 # ==========================================
