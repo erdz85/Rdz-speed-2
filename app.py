@@ -5,26 +5,24 @@ from datetime import datetime
     
 def get_unified_projection(session_type, fat_time, block_val, fly_val, gender):
     """
-    Unified projection with strict fallback to the Precise Conversion Model.
+    Unified projection model:
+    Primary: 30m Block + (3.5 * 20m Fly) + C
+    Fallback (No Block): (20m Fly / 2 * 10) + Gender Constant
     """
     is_female = 'female' in str(gender).lower()
-    
-    # Define primary inputs
     f_val = fly_val if (fly_val and fly_val > 0) else fat_time
     b_val = block_val if (block_val and block_val > 0) else None
     
-    # 1. GOLD STANDARD: Multi-Variable Formula (Requires Block + Fly)
+    # 1. PRIMARY: Multi-Variable Formula (requires block start)
     if b_val is not None:
-        # Determine Speed Endurance Constant (C)
         base_proj = b_val + (3.5 * f_val)
         c = (0.15 if base_proj < 12.2 else 0.25) if is_female else (0.12 if base_proj < 11.0 else 0.18)
         return round(b_val + (3.5 * f_val) + c, 2)
     
-    # 2. PRECISE FALLBACK: Curved Velocity Regression Model (If Block is missing)
+    # 2. FALLBACK: Precise Conversion Model from Screen Shot 2026-06-27 at 7.44.36 PM.png
     else:
-        # Formula: (Fly / 20 * 100) + Gender Constant
-        # Constants: Boys 1.17 | Girls 1.22 (using your requested 1.05/1.15 logic)
-        gender_const = 1.15 if not is_female else 1.05 
+        # Femenil Constant: 1.15 | Varonil Constant: 1.05
+        gender_const = 1.15 if is_female else 1.05 
         projection = (f_val / 2 * 10) + gender_const
         return round(projection, 2)
         
