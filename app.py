@@ -36,7 +36,6 @@ st.set_page_config(
 ROSTER_CACHE = "roster_storage.csv"
 LOGS_CACHE = "workout_logs_storage.csv"
 
-
 # ==========================================
 # GLOBAL APP STATE INITIALIZATION & HEALING
 # ==========================================
