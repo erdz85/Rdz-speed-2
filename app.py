@@ -2,37 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
-import time
-
-new_log = {
-    'athlete_id': selected_id,
-    'log_id': time.time(), # This makes every log entry unique
-    'date': datetime.now().strftime("%Y-%m-%d"),
-    'type': '20m_fly',
-    'fat': entry_value,
-    'proj_100': calc_value
-}
-# Then use pd.concat to add it
-st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log])])# 1. Page Configuration (Must be first)
-st.set_page_config(layout="wide", page_title="RDZ Speed Intelligence")
-
-# 2. Session State Initialization (The "Stability" Layer)
-def init_session_state():
-    if 'workout_logs' not in st.session_state:
-        # We add 'log_id' for granular deletion later
-        st.session_state.workout_logs = pd.DataFrame(columns=[
-            'athlete_id', 'log_id', 'date', 'type', 'fat', 'proj_100'
-        ])
-    if 'athletes' not in st.session_state:
-        st.session_state.athletes = pd.DataFrame()
-
-# Call this immediately
-init_session_state()
-
-# 3. Rest of your application code begins here...
-
-if 'workout_logs' not in st.session_state:
-    st.session_state.workout_logs = pd.DataFrame(columns=['id', 'log_id', 'date', 'type', 'fat', 'proj_100'])  
     
 def get_unified_projection(session_type, fat_time, block_val, fly_val, gender):
     """
@@ -66,6 +35,7 @@ st.set_page_config(
 # --- LOCAL PERSISTENCE STORAGE TRACKERS ---
 ROSTER_CACHE = "roster_storage.csv"
 LOGS_CACHE = "workout_logs_storage.csv"
+
 
 # ==========================================
 # GLOBAL APP STATE INITIALIZATION & HEALING
