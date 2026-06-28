@@ -903,83 +903,54 @@ elif app_portal == "📄 AD Report Export":
             logs_clean['fat'] = pd.to_numeric(logs_clean['fat'], errors='coerce')
             logs_clean['proj_100'] = pd.to_numeric(logs_clean['proj_100'], errors='coerce')
 
-        # 3. Dynamic Performance Metrics Processing Loop
+       # 3. Dynamic Performance Metrics Processing Loop (AUDITED)
         processed_roster = []
         total_deltas = 0.0
         delta_count = 0
         velocity_sums = 0.0
         velocity_count = 0
-        
-        # Track metric pools for downstream automated relay lineup generation fallback
         relay_pool = []
 
         for _, athlete in active_squad.iterrows():
             a_id = str(athlete['id']).strip()
             a_name = str(athlete['name']).strip()
+            a_gender = str(athlete.get('gender', 'male')).lower()
             
-            baseline_val = None
-            pr_val = None
-            best_block_val = None
-            proj_val = None
+            # Fetch raw data
+            ath_logs = logs_clean[logs_clean['athlete_id'] == a_id]
+            f_best = ath_logs[ath_logs['type'] == '20m_fly']['fat'].min()
+            b_best = ath_logs[ath_logs['type'] == '30m_block']['fat'].min()
+            f_baseline = ath_logs[ath_logs['type'] == '20m_fly']['fat'].iloc[0] if not ath_logs[ath_logs['type'] == '20m_fly'].empty else None
             
-            if has_logs:
-                # Process 20m fly interval tracking logs
-                fly_logs = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '20m_fly')].sort_values(by='log_id')
-                if not fly_logs.empty:
-                    baseline_val = float(fly_logs.iloc[0]['fat'])
-                    pr_val = float(fly_logs['fat'].min())
-                    
-                    # Target projected 100m linked directly to the PR performance execution
-                    proj_val = float(fly_logs[fly_logs['fat'] == pr_val].iloc[0]['proj_100'])
-                    
-                    # Accumulate team velocity parameters (v = 20m / t)
-                    if pr_val > 0:
-                        velocity_sums += (20.0 / pr_val)
-                        velocity_count += 1
-                
-                # Process 30m starting block data streams
-                block_logs = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '30m_block')]
-                if not block_logs.empty:
-                    best_block_val = float(block_logs['fat'].min())
-
-            # Map display strings elegantly
-            base_str = f"{baseline_val:.2f}s FAT" if baseline_val else "--"
-            pr_str = f"{pr_val:.2f}s FAT" if pr_val else "--"
+            # CALLING UNIFIED ENGINE: References your Source of Truth
+            proj_val = get_unified_projection(None, f_best, b_best, f_best, a_gender)
+            
+            # Mapping display strings
+            base_str = f"{f_baseline:.2f}s FAT" if pd.notna(f_baseline) else "--"
+            pr_str = f"{f_best:.2f}s FAT" if pd.notna(f_best) else "--"
             
             delta_str = "0.00s"
-            if pr_val and baseline_val:
-                diff = pr_val - baseline_val
-                delta_str = f"{diff:+.2f}s" if diff != 0 else "0.00s"
+            if pd.notna(f_best) and pd.notna(f_baseline):
+                diff = f_best - f_baseline
+                delta_str = f"{diff:+.2f}s"
                 total_deltas += diff
                 delta_count += 1
 
             is_qualifier = (proj_val <= state_qual_time) if proj_val else False
-            proj_str = f"{proj_val:.2f}s" if proj_val else "--"
-            if is_qualifier:
-                proj_str += " *"
+            proj_str = f"{proj_val:.2f}s" + (" *" if is_qualifier else "")
 
-            # Push structured data layout back to presentation array
             processed_roster.append({
-                "id": a_id,
-                "name": a_name,
-                "baseline": base_str,
-                "pr": pr_str,
-                "delta": delta_str,
-                "proj": proj_str,
+                "id": a_id, "name": a_name, "baseline": base_str,
+                "pr": pr_str, "delta": delta_str, "proj": proj_str,
                 "is_qualifier": is_qualifier
             })
 
-            # Populate evaluation dict for backup sorting
+            # Populate relay pool for fallback selection
             relay_pool.append({
                 "name": a_name,
-                "best_fly": pr_val if pr_val else 2.20,
-                "best_block": best_block_val if best_block_val else 4.20
+                "best_fly": f_best if pd.notna(f_best) else 2.20,
+                "best_block": b_best if pd.notna(b_best) else 4.20
             })
-
-        # Calculate high-level performance metrics summaries
-        tracked_count = len(active_squad)
-        avg_improvement = f"{total_deltas / delta_count:+.2f}s" if delta_count > 0 else "0.00s"
-        avg_velocity = f"{velocity_sums / velocity_count:.2f} m/s" if velocity_count > 0 else "-- m/s"
 
         # =========================================================================
         # 4. CROSS-MODULE LINEUP INTEGRATION (READS FROM MODULE 5 OVERRIDES)
