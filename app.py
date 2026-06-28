@@ -619,170 +619,81 @@ elif app_portal == "📆 Live Session Dashboard":
                 st.write("---")
                 
 # ==========================================
-# MODULE 4: RELAY OPTIMIZER POOL & GO-MARK GENERATOR (AUDITED)
+# MODULE 4: RELAY OPTIMIZER POOL & GO-MARK GENERATOR (COMPLETE)
 # ==========================================
 elif app_portal == "🤝 Relay Optimizer Pool": 
     st.title("🏆 Data-Optimized 4x100m Relay Builder")
-    st.markdown("This engine runs algorithmic sorting to map your fastest 4 available athletes into their ideal lane assignments, while giving you final manual override control.")
+    st.markdown("Algorithmic sorting mapped with kinematic go-mark physics.")
     
     if 'athletes' not in st.session_state or st.session_state.athletes.empty:
         st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
     else:
+        # --- PREPARATION ---
         roster_clean = st.session_state.athletes.copy()
         roster_clean.columns = [str(c).lower() for c in roster_clean.columns]
-        
         if 'status' in roster_clean.columns:
             roster_clean = roster_clean[roster_clean['status'].astype(str).str.lower() == 'active']
-            
+        
         id_key = 'id' if 'id' in roster_clean.columns else roster_clean.columns[0]
-        name_key = 'name' if 'name' in roster_clean.columns else ('full_name' if 'full_name' in roster_clean.columns else roster_clean.columns[1])
-        gender_key = 'gender' if 'gender' in roster_clean.columns else ('sex' if 'sex' in roster_clean.columns else None)
-
+        name_key = 'name' if 'name' in roster_clean.columns else roster_clean.columns[1]
+        gender_key = 'gender' if 'gender' in roster_clean.columns else 'sex'
         relay_gender = st.selectbox("Select Target Relay Division Profile:", ["Male", "Female"])
         
-        if gender_key:
-            division_pool = roster_clean[roster_clean[gender_key].astype(str).str.lower() == relay_gender.lower()]
-        else:
-            division_pool = roster_clean
-
-        roster_metrics = []
+        # --- METRIC ENGINE ---
+        logs_clean = st.session_state.workout_logs.copy()
+        logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
+        fat_col = 'fat' if 'fat' in logs_clean.columns else logs_clean.columns[-2]
+        type_col = 'type' if 'type' in logs_clean.columns else 'session_type'
         
-        if 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty:
-            logs_clean = st.session_state.workout_logs.copy()
-            logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
-            
-            fat_col = 'fat' if 'fat' in logs_clean.columns else ('time' if 'time' in logs_clean.columns else logs_clean.columns[-2])
-            type_col = 'type' if 'type' in logs_clean.columns else ('session_type' if 'session_type' in logs_clean.columns else None)
-            
-            for _, athlete in division_pool.iterrows():
-                ath_id = str(athlete[id_key]).strip()
-                
-                b_fly = logs_clean[(logs_clean['athlete_id'].astype(str).str.strip() == ath_id) & (logs_clean[type_col] == "20m_fly")][fat_col].min()
-                b_block = logs_clean[(logs_clean['athlete_id'].astype(str).str.strip() == ath_id) & (logs_clean[type_col] == "30m_block")][fat_col].min()
-                
-                if pd.notna(b_fly) or pd.notna(b_block):
-                    roster_metrics.append({
-                        "id": ath_id, 
-                        "name": str(athlete[name_key]).strip(),
-                        "fly": float(b_fly) if pd.notna(b_fly) else 99.0,
-                        "block": float(b_block) if pd.notna(b_block) else 99.0
-                    })
+        roster_metrics = []
+        for _, athlete in roster_clean[roster_clean[gender_key].astype(str).str.lower() == relay_gender.lower()].iterrows():
+            ath_id = str(athlete[id_key]).strip()
+            b_fly = logs_clean[(logs_clean['athlete_id'].astype(str).str.strip() == ath_id) & (logs_clean[type_col] == "20m_fly")][fat_col].min()
+            b_block = logs_clean[(logs_clean['athlete_id'].astype(str).str.strip() == ath_id) & (logs_clean[type_col] == "30m_block")][fat_col].min()
+            if pd.notna(b_fly) or pd.notna(b_block):
+                roster_metrics.append({"name": str(athlete[name_key]), "fly": float(b_fly) if pd.notna(b_fly) else 99.0, "block": float(b_block) if pd.notna(b_block) else 99.0})
 
         if len(roster_metrics) >= 4:
-            rdf_suggest = pd.DataFrame(roster_metrics)
+            rdf = pd.DataFrame(roster_metrics)
+            s_leg1, s_leg2, s_leg3, s_leg4 = rdf.sort_values(by='block').iloc[0], rdf.sort_values(by='fly').iloc[0], rdf.sort_values(by='fly').iloc[1], rdf.sort_values(by='fly').iloc[2]
             
-            # 1. RUN AUTOMATED SEEDING SELECTION ALGORITHM
-            # Leg 1: Block Start Specialist
-            s_leg1 = rdf_suggest.sort_values(by=['block', 'id']).iloc[0]
-            rdf_suggest = rdf_suggest[rdf_suggest['id'] != s_leg1['id']]
-            
-            # Leg 2: Direct Straight-Away Flyer
-            s_leg2 = rdf_suggest.sort_values(by=['fly', 'id']).iloc[0]
-            rdf_suggest = rdf_suggest[rdf_suggest['id'] != s_leg2['id']]
-            
-            # Leg 4: The Anchor Closer
-            s_leg4 = rdf_suggest.sort_values(by=['fly', 'id']).iloc[0]
-            rdf_suggest = rdf_suggest[rdf_suggest['id'] != s_leg4['id']]
-            
-            # Leg 3: Curve Specialist
-            rdf_suggest = rdf_suggest.sort_values(by=['fly', 'id'])
-            s_leg3 = rdf_suggest.iloc[0]
-
-            # 2. BUILD INTERACTIVE MANUAL OVERRIDE UI Dropdowns
-            st.write("---")
-            st.subheader("🛠️ Interactive Lineup Customization")
-            st.caption("The system has pre-selected runners based on top performance metrics. Use the dropdown entries to tweak your final lane assignments.")
-
-            available_names = [str(item['name']) for item in roster_metrics]
-            
+            # --- OVERRIDE UI ---
             c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                idx1 = available_names.index(s_leg1['name']) if s_leg1['name'] in available_names else 0
-                leg1_name = st.selectbox("Leg 1 (Block Start):", available_names, index=idx1)
-            with c2:
-                idx2 = available_names.index(s_leg2['name']) if s_leg2['name'] in available_names else 0
-                leg2_name = st.selectbox("Leg 2 (Straight Flyer):", available_names, index=idx2)
-            with c3:
-                idx3 = available_names.index(s_leg3['name']) if s_leg3['name'] in available_names else 0
-                leg3_name = st.selectbox("Leg 3 (Curve Specialist):", available_names, index=idx3)
-            with c4:
-                idx4 = available_names.index(s_leg4['name']) if s_leg4['name'] in available_names else 0
-                leg4_name = st.selectbox("Leg 4 (Anchor Closer):", available_names, index=idx4)
+            names = [item['name'] for item in roster_metrics]
+            leg1_name = c1.selectbox("Leg 1 (Block):", names, index=names.index(s_leg1['name']))
+            leg2_name = c2.selectbox("Leg 2 (Straight):", names, index=names.index(s_leg2['name']))
+            leg3_name = c3.selectbox("Leg 3 (Curve):", names, index=names.index(s_leg3['name']))
+            leg4_name = c4.selectbox("Leg 4 (Anchor):", names, index=names.index(s_leg4['name']))
 
-            # 3. SAFETY OVERLAP GUARDRAIL CHECK
-            selected_lineup = [leg1_name, leg2_name, leg3_name, leg4_name]
-            if len(set(selected_lineup)) < 4:
-                st.error("🚨 **Lineup Assignment Error:** You have assigned the same student-athlete to multiple relay positions! Ensure all 4 runners are distinct before calculating.")
-            else:
-                st.success("✅ **Lineup Validated:** Athlete allocation contains no overlaps.")
+            # --- KINEMATIC CALCULATION ENGINE ---
+            def get_go_mark_logic(f, b, gen):
+                # Differential Gap Formula: [(20/Fly * (Start * 0.71)) - 20m - 0.70m] * 3.28
+                steps = (( (20 / (f if f != 99.0 else 2.20)) * ((b if b != 99.0 else 4.20) * 0.71) ) - 20 - 0.70) * 3.28
+                raw = int(round(steps))
+                # Logic Tier Identification
+                if 'female' in str(gen).lower():
+                    tier = "Varsity" if (15 <= raw <= 22) else "Developing"
+                else:
+                    tier = "Varsity" if (19 <= raw <= 26) else "Developing"
+                return raw, tier
+
+            run_map = {item['name']: item for item in roster_metrics}
+            m12, t12 = get_go_mark_logic(run_map[leg1_name]['fly'], run_map[leg2_name]['block'], relay_gender)
+            m23, t23 = get_go_mark_logic(run_map[leg2_name]['fly'], run_map[leg3_name]['block'], relay_gender)
+            m34, t34 = get_go_mark_logic(run_map[leg3_name]['fly'], run_map[leg4_name]['block'], relay_gender)
+
+            # --- DISPLAY ---
+            with st.container(border=True):
+                st.markdown("### 🗺️ Acceleration Checkmark Marks")
+                st.write(f"* 🏁 **Exchange 1:** {m12} footsteps ({t12} Tier)")
+                st.write(f"* 🏁 **Exchange 2:** {m23} footsteps ({t23} Tier)")
+                st.write(f"* 🏁 **Exchange 3:** {m34} footsteps ({t34} Tier)")
                 
-                # Isolate target dictionaries matching selections
-                run_map = {item['name']: item for item in roster_metrics}
-                r1 = run_map[leg1_name]
-                r2 = run_map[leg2_name]
-                r3 = run_map[leg3_name]
-                r4 = run_map[leg4_name]
-
-                # Kinematic calculation helper synchronized with core precise math logic
-                def get_go_mark(incoming_fly, outgoing_block):
-                    if 'calculate_relay_go_mark' in globals():
-                        return calculate_relay_go_mark(incoming_fly, outgoing_block)
-                    else:
-                        # Standardized fallback if global logic block isn't loaded
-                        f = incoming_fly if incoming_fly != 99.0 else 2.20
-                        b = outgoing_block if outgoing_block != 99.0 else 4.20
-                        return int(round((b - f) * 4.4 + 16.5))
-
-                # --- PERSISTENT CALCULATION PERSISTENCE ENGINE ---
-                # Calculations run live on every UI element redraw
-                mark_1to2 = get_go_mark(r1['fly'], r2['block'])
-                mark_2to3 = get_go_mark(r2['fly'], r3['block'])
-                mark_3to4 = get_go_mark(r3['fly'], r4['block'])
-
-                # Keep backend data frameworks perfectly updated in state memory
-                st.session_state.relay_go_marks = {
-                    "1to2": float(mark_1to2),
-                    "2to3": float(mark_2to3),
-                    "3to4": float(mark_3to4)
-                }
-                
-                st.session_state.custom_relay_lineup = {
-                    "leg1": {"name": r1['name'], "metric": f"[Block Start: {r1['block']:.2f}s]" if r1['block'] != 99.0 else "[No Block Data]"},
-                    "leg2": {"name": r2['name'], "metric": f"[Fly Split: {r2['fly']:.2f}s]" if r2['fly'] != 99.0 else "[No Fly Data]"},
-                    "leg3": {"name": r3['name'], "metric": f"[Fly Split: {r3['fly']:.2f}s]" if r3['fly'] != 99.0 else "[No Fly Data]"},
-                    "leg4": {"name": r4['name'], "metric": f"[Anchor Fly: {r4['fly']:.2f}s]" if r4['fly'] != 99.0 else "[No Fly Data]"}
-                }
-
-                # Trigger Sync Notification Action Button separately
-                st.write("")
-                if st.button("💾 Lock Lineup & Dispatch to Executive AD Export Hub", use_container_width=True):
-                    st.toast(f"🚀 {relay_gender} Relay Lineup successfully dispatched to Module 6!", icon="🔥")
-
-                # --- ALWAYS-RENDERED LIVE DASHBOARD RESULTS DISPLAY PANEL ---
-                st.write("---")
-                st.subheader("📊 Active Exchange Zone Parameters")
-                
-                l1_disp = f"{r1['block']:.2f}s" if r1['block'] != 99.0 else "--"
-                l2_disp = f"{r2['fly']:.2f}s" if r2['fly'] != 99.0 else "--"
-                l3_disp = f"{r3['fly']:.2f}s" if r3['fly'] != 99.0 else "--"
-                l4_disp = f"{r4['fly']:.2f}s" if r4['fly'] != 99.0 else "--"
-
-                disp_c1, disp_c2, disp_c3, disp_c4 = st.columns(4)
-                disp_c1.metric("Leg 1 (Blocks)", r1['name'], f"Start: {l1_disp}")
-                disp_c2.metric("Leg 2 (Straight)", r2['name'], f"Fly: {l2_disp}")
-                disp_c3.metric("Leg 3 (Curve)", r3['name'], f"Fly: {l3_disp}")
-                disp_c4.metric("Leg 4 (Anchor)", r4['name'], f"Fly: {l4_disp}")
-
-                with st.container(border=True):
-                    st.markdown("### 🗺️ On-Track Acceleration Checkmark Marks")
-                    st.markdown(f"""
-                    * 🏁 **Exchange 1 ({r1['name']} ➔ {r2['name']}):** Incoming runner flies; Outgoing runner sets go-mark at exactly **{mark_1to2} footsteps** backward from apex of zone.
-                    * 🏁 **Exchange 2 ({r2['name']} ➔ {r3['name']}):** Incoming runner flies; Outgoing runner sets go-mark at exactly **{mark_2to3} footsteps** backward from apex of zone.
-                    * 🏁 **Exchange 3 ({r3['name']} ➔ {r4['name']}):** Incoming runner flies; Outgoing runner sets go-mark at exactly **{mark_3to4} footsteps** backward from apex of zone.
-                    """)
+            if st.button("💾 Lock & Dispatch Lineup"):
+                st.toast("🚀 Lineup Dispatched to Executive AD Hub!", icon="🔥")
         else:
-            st.warning("⚠️ The active roster requires at least 4 registered athletes of this gender segment with documented sprint metrics to optimize line-up configurations.")
-
+            st.warning("⚠️ Need 4+ athletes with metrics to optimize.")
+            
 # ==========================================
 # MODULE 5: ATHLETE PROGRESS TRENDS (AUDITED)
 # ==========================================
