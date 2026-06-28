@@ -2,10 +2,10 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import streamlit as st
-import pandas as pd
-from datetime import datetime
-# 1. PLACE THIS AT THE VERY TOP (After your imports)
+
+# ==========================================
+# INITIALIZATION & STATE
+# ==========================================
 def init_app():
     # Setup Athletes DataFrame
     if 'athletes' not in st.session_state:
@@ -17,7 +17,7 @@ def init_app():
                 "pr_100", "pr_200", "pr_400"
             ])
             
-    # Add PR columns if they don't exist (prevents crashes)
+    # Add PR columns if they don't exist
     cols_to_add = ["pr_100", "pr_200", "pr_400"]
     for col in cols_to_add:
         if col not in st.session_state.athletes.columns:
@@ -30,15 +30,11 @@ def init_app():
         except:
             st.session_state.workout_logs = pd.DataFrame(columns=["date", "athlete_id", "type", "fat", "proj_100"])
 
-# 2. RUN IT ONCE
+# Run the initialization
 init_app()
 
-# 3. THEN your menu/sidebar code follows:
-app_portal = st.sidebar.selectbox("Navigation", ["👥 Roster & Onboarding Hub", ...])
-
-# 4. THEN your modules start:
-if app_portal == "👥 Roster & Onboarding Hub":
-    # ... your module 1 code ...
+# Now your Navigation code...
+app_portal = st.sidebar.selectbox("Navigation", ["👥 Roster & Onboarding Hub", "⏱️ Workout Tracker", ...])
 # ==========================================
 # SOURCE OF TRUTH: KINEMATIC ENGINE
 # ==========================================
