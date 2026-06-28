@@ -30,11 +30,9 @@ def init_app():
         except:
             st.session_state.workout_logs = pd.DataFrame(columns=["date", "athlete_id", "type", "fat", "proj_100"])
 
-# Run the initialization
+# Run initialization once
 init_app()
 
-# Now your Navigation code...
-app_portal = st.sidebar.selectbox("Navigation", ["👥 Roster & Onboarding Hub", "⏱️ Workout Tracker", ...])
 # ==========================================
 # SOURCE OF TRUTH: KINEMATIC ENGINE
 # ==========================================
@@ -69,26 +67,9 @@ def get_go_mark_logic(f, b, gen):
     return raw, tier
 
 # ==========================================
-# INITIALIZATION & STATE
-# ==========================================
-def init_app():
-    if 'athletes' not in st.session_state:
-        try:
-            st.session_state.athletes = pd.read_csv("roster_storage.csv")
-        except:
-            st.session_state.athletes = pd.DataFrame(columns=["id", "name", "gender", "grade", "group", "tier", "status"])
-    if 'workout_logs' not in st.session_state:
-        try:
-            st.session_state.workout_logs = pd.read_csv("workout_logs_storage.csv")
-        except:
-            st.session_state.workout_logs = pd.DataFrame(columns=["date", "athlete_id", "type", "fat", "proj_100"])
-
-init_app()
-
-# ==========================================
 # NAVIGATION
 # ==========================================
-st.sidebar.title("⚡ RDZ Speed Intelligence")
+st.sidebar.title("⚡ RDZ Speed Development")
 app_portal = st.sidebar.radio("Go To Module Portal:", [
     "👥 Roster & Onboarding Hub",
     "⏱️ Workout Tracker",   
@@ -98,10 +79,6 @@ app_portal = st.sidebar.radio("Go To Module Portal:", [
     "🏆 Team Leaderboards", 
     "📄 AD Report Export"
 ])
-
-# ==========================================
-# CORE MODULES GATEWAY
-# ==========================================
 
 # ==========================================
 # MODULE 1: ROSTER & ONBOARDING HUB
