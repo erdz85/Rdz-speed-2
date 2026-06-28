@@ -106,7 +106,7 @@ app_portal = st.sidebar.radio("Go To Module Portal:", [
 # ==========================================
 # MODULE 1: ROSTER & ONBOARDING HUB
 # ==========================================
-elif app_portal == "👥 Roster & Onboarding Hub":
+if app_portal == "👥 Roster & Onboarding Hub":
     st.title("👥 Roster & Onboarding Hub")
     
     st.subheader("➕ Onboard New Athlete")
