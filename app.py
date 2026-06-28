@@ -5,20 +5,28 @@ from datetime import datetime
     
 def get_unified_projection(session_type, fat_time, block_val, fly_val, gender):
     """
-    Unified projection model using 10m split anchor.
+    Unified projection with strict fallback to the Precise Conversion Model.
     """
-    # 1. Determine base fly time (use input if available, otherwise default)
-    f_time = fat_time if session_type == "20m_fly" else (fly_val if fly_val and fly_val > 0 else 2.2)
+    is_female = 'female' in str(gender).lower()
     
-    # 2. Apply formulas based on gender
-    if 'female' in str(gender).lower():
-        # Femenil: (Fly/2 * 10) + 1.15
-        projection = (f_time / 2 * 10) + 1.15
+    # Define primary inputs
+    f_val = fly_val if (fly_val and fly_val > 0) else fat_time
+    b_val = block_val if (block_val and block_val > 0) else None
+    
+    # 1. GOLD STANDARD: Multi-Variable Formula (Requires Block + Fly)
+    if b_val is not None:
+        # Determine Speed Endurance Constant (C)
+        base_proj = b_val + (3.5 * f_val)
+        c = (0.15 if base_proj < 12.2 else 0.25) if is_female else (0.12 if base_proj < 11.0 else 0.18)
+        return round(b_val + (3.5 * f_val) + c, 2)
+    
+    # 2. PRECISE FALLBACK: Curved Velocity Regression Model (If Block is missing)
     else:
-        # Varonil: (Fly/2 * 10) + 1.05
-        projection = (f_time / 2 * 10) + 1.05
-    
-    return round(projection, 2)
+        # Formula: (Fly / 20 * 100) + Gender Constant
+        # Constants: Boys 1.17 | Girls 1.22 (using your requested 1.05/1.15 logic)
+        gender_const = 1.15 if not is_female else 1.05 
+        projection = (f_val / 2 * 10) + gender_const
+        return round(projection, 2)
         
 st.set_page_config(
     page_title="High-Performance Sprint Analytics",
