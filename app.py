@@ -1,3 +1,5 @@
+if 'workout_logs' not in st.session_state:
+    st.session_state.workout_logs = pd.DataFrame(columns=['id', 'log_id', 'date', 'type', 'fat', 'proj_100'])
 import streamlit as st
 import pandas as pd
 import os
