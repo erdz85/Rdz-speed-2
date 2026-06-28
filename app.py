@@ -3,6 +3,9 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 
+def save_data():
+    st.session_state.athletes.to_csv("roster_storage.csv", index=False)
+    st.session_state.workout_logs.to_csv("workout_logs_storage.csv", index=False)
 # ==========================================
 # INITIALIZATION & STATE
 # ==========================================
