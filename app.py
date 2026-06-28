@@ -2,7 +2,18 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
-# 1. Page Configuration (Must be first)
+import time
+
+new_log = {
+    'athlete_id': selected_id,
+    'log_id': time.time(), # This makes every log entry unique
+    'date': datetime.now().strftime("%Y-%m-%d"),
+    'type': '20m_fly',
+    'fat': entry_value,
+    'proj_100': calc_value
+}
+# Then use pd.concat to add it
+st.session_state.workout_logs = pd.concat([st.session_state.workout_logs, pd.DataFrame([new_log])])# 1. Page Configuration (Must be first)
 st.set_page_config(layout="wide", page_title="RDZ Speed Intelligence")
 
 # 2. Session State Initialization (The "Stability" Layer)
