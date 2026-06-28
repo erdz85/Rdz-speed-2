@@ -2,6 +2,23 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
+# 1. Page Configuration (Must be first)
+st.set_page_config(layout="wide", page_title="RDZ Speed Intelligence")
+
+# 2. Session State Initialization (The "Stability" Layer)
+def init_session_state():
+    if 'workout_logs' not in st.session_state:
+        # We add 'log_id' for granular deletion later
+        st.session_state.workout_logs = pd.DataFrame(columns=[
+            'athlete_id', 'log_id', 'date', 'type', 'fat', 'proj_100'
+        ])
+    if 'athletes' not in st.session_state:
+        st.session_state.athletes = pd.DataFrame()
+
+# Call this immediately
+init_session_state()
+
+# 3. Rest of your application code begins here...
 
 if 'workout_logs' not in st.session_state:
     st.session_state.workout_logs = pd.DataFrame(columns=['id', 'log_id', 'date', 'type', 'fat', 'proj_100'])  
