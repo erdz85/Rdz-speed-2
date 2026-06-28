@@ -847,7 +847,7 @@ elif app_portal == "🏆 Team Leaderboards":
                 c2.markdown(f"### **{row[fat_col]:.2f}{suffix}**")
 
 # ==========================================
-# MODULE 7: AD REPORT EXPORT ("THE AD CLOSER")
+# MODULE 7: AD REPORT EXPORT ("THE AD CLOSER") - AUDITED
 # ==========================================
 elif app_portal == "📄 AD Report Export":
     import io
@@ -860,298 +860,69 @@ elif app_portal == "📄 AD Report Export":
     from reportlab.lib.units import inch
 
     st.title("📄 Executive AD Report Generator")
-    st.subheader("Generate Data-Driven Program Justification Printouts")
     
-    st.info("💡 **Print-Optimized Formatting:** This engine builds a high-contrast, monochrome PDF designed perfectly for standard office printers, bulletin boards, and athletic department budget reviews.")
-
-    # 1. User Inputs & Configuration Controls
+    # 1. Configuration Controls
     col1, col2 = st.columns(2)
-    with col1:
-        coach_name = st.text_input("Head Coach Name:", value="John Doe")
-        program_name = st.text_input("Program Title:", value="NORTHSIDE TRACK & FIELD")
-    with col2:
-        squad_division = st.selectbox("Squad/Division Filter:", ["VARSITY BOYS", "VARSITY GIRLS", "FROSH-SOPH"])
-        state_qual_time = st.number_input("State Qual 100m Benchmark (s):", value=11.00, step=0.05)
+    coach_name = col1.text_input("Head Coach Name:", value="John Doe")
+    program_name = col1.text_input("Program Title:", value="NORTHSIDE TRACK & FIELD")
+    squad_division = col2.selectbox("Squad/Division Filter:", ["VARSITY BOYS", "VARSITY GIRLS", "FROSH-SOPH"])
+    state_qual_time = col2.number_input("State Qual 100m Benchmark (s):", value=11.00, step=0.05)
 
-    st.write("---")
-
-    # 2. Safety Guardrails: Check if base data structures exist
     if 'athletes' not in st.session_state or st.session_state.athletes.empty:
-        st.info("ℹ️ Please add athletes inside the Roster & Onboarding Hub first.")
+        st.info("ℹ️ Please add athletes in the Roster Hub.")
     else:
-        # Clone and normalize core roster dataframe keys
-        roster_clean = st.session_state.athletes.copy()
-        roster_clean.columns = [str(c).lower().strip() for c in roster_clean.columns]
+        # --- PREPARE DATA ---
+        roster = st.session_state.athletes.copy()
+        roster.columns = [str(c).lower().strip() for c in roster.columns]
+        logs = st.session_state.workout_logs.copy() if 'workout_logs' in st.session_state else pd.DataFrame()
         
-        # Isolate active athletes exclusively
-        active_squad = roster_clean[roster_clean['status'].astype(str).str.lower() == 'active']
+        # Filter Logic
+        active_squad = roster[roster['status'].astype(str).str.lower() == 'active']
         
-        # Apply specific Squad/Division filtering mappings
-        if squad_division == "VARSITY BOYS":
-            active_squad = active_squad[(active_squad['tier'].astype(str).str.lower() == 'varsity') & (active_squad['gender'].astype(str).str.lower() == 'male')]
-        elif squad_division == "VARSITY GIRLS":
-            active_squad = active_squad[(active_squad['tier'].astype(str).str.lower() == 'varsity') & (active_squad['gender'].astype(str).str.lower() == 'female')]
-        elif squad_division == "FROSH-SOPH":
-            active_squad = active_squad[active_squad['grade'].astype(str).str.strip().isin(['9', '10'])]
-
-        # Load workout log records safely
-        has_logs = 'workout_logs' in st.session_state and not st.session_state.workout_logs.empty
-        if has_logs:
-            logs_clean = st.session_state.workout_logs.copy()
-            logs_clean.columns = [str(c).lower().strip() for c in logs_clean.columns]
-            logs_clean['athlete_id'] = logs_clean['athlete_id'].astype(str).str.strip()
-            logs_clean['fat'] = pd.to_numeric(logs_clean['fat'], errors='coerce')
-            logs_clean['proj_100'] = pd.to_numeric(logs_clean['proj_100'], errors='coerce')
-
-       # 3. Dynamic Performance Metrics Processing Loop (AUDITED)
+        # --- DYNAMIC METRICS LOOP ---
         processed_roster = []
-        total_deltas = 0.0
-        delta_count = 0
-        velocity_sums = 0.0
-        velocity_count = 0
-        relay_pool = []
-
         for _, athlete in active_squad.iterrows():
             a_id = str(athlete['id']).strip()
             a_name = str(athlete['name']).strip()
             a_gender = str(athlete.get('gender', 'male')).lower()
             
-            # Fetch raw data
-            ath_logs = logs_clean[logs_clean['athlete_id'] == a_id]
+            # Fetch from logs
+            ath_logs = logs[logs['athlete_id'].astype(str).str.strip() == a_id]
             f_best = ath_logs[ath_logs['type'] == '20m_fly']['fat'].min()
             b_best = ath_logs[ath_logs['type'] == '30m_block']['fat'].min()
-            f_baseline = ath_logs[ath_logs['type'] == '20m_fly']['fat'].iloc[0] if not ath_logs[ath_logs['type'] == '20m_fly'].empty else None
+            f_base = ath_logs[ath_logs['type'] == '20m_fly']['fat'].iloc[0] if not ath_logs[ath_logs['type'] == '20m_fly'].empty else None
             
-            # CALLING UNIFIED ENGINE: References your Source of Truth
-            proj_val = get_unified_projection(None, f_best, b_best, f_best, a_gender)
+            # UNIFIED ENGINE CALL
+            proj_val = get_unified_projection("20m_fly", f_best, b_best, f_best, a_gender)
             
-            # Mapping display strings
-            base_str = f"{f_baseline:.2f}s FAT" if pd.notna(f_baseline) else "--"
-            pr_str = f"{f_best:.2f}s FAT" if pd.notna(f_best) else "--"
-            
-            delta_str = "0.00s"
-            if pd.notna(f_best) and pd.notna(f_baseline):
-                diff = f_best - f_baseline
-                delta_str = f"{diff:+.2f}s"
-                total_deltas += diff
-                delta_count += 1
-
-            is_qualifier = (proj_val <= state_qual_time) if proj_val else False
-            proj_str = f"{proj_val:.2f}s" + (" *" if is_qualifier else "")
-
+            # Formatting
             processed_roster.append({
-                "id": a_id, "name": a_name, "baseline": base_str,
-                "pr": pr_str, "delta": delta_str, "proj": proj_str,
-                "is_qualifier": is_qualifier
-            })
-
-            # Populate relay pool for fallback selection
-            relay_pool.append({
                 "name": a_name,
-                "best_fly": f_best if pd.notna(f_best) else 2.20,
-                "best_block": b_best if pd.notna(b_best) else 4.20
+                "baseline": f"{f_base:.2f}s" if pd.notna(f_base) else "--",
+                "pr": f"{f_best:.2f}s" if pd.notna(f_best) else "--",
+                "delta": f"{f_best - f_base:+.2f}s" if pd.notna(f_best) and pd.notna(f_base) else "0.00s",
+                "proj": f"{proj_val:.2f}s" + (" *" if proj_val <= state_qual_time else "")
             })
 
-        # =========================================================================
-        # 4. CROSS-MODULE LINEUP INTEGRATION (READS FROM MODULE 5 OVERRIDES)
-        # =========================================================================
-        if 'custom_relay_lineup' in st.session_state and isinstance(st.session_state.custom_relay_lineup, dict):
-            # Read exact manual selections from Module 5
-            c_lineup = st.session_state.custom_relay_lineup
-            leg1_name = c_lineup['leg1']['name']
-            leg1_metric = c_lineup['leg1']['metric']
-            
-            leg2_name = c_lineup['leg2']['name']
-            leg2_metric = c_lineup['leg2']['metric']
-            
-            leg3_name = c_lineup['leg3']['name']
-            leg3_metric = c_lineup['leg3']['metric']
-            
-            leg4_name = c_lineup['leg4']['name']
-            leg4_metric = c_lineup['leg4']['metric']
-        else:
-            # Fallback Selection Engine: Auto-calculate default if Module 5 hasn't run yet
-            leg1_name, leg1_metric = "Vacant Slot", "[No Data]"
-            leg2_name, leg2_metric = "Vacant Slot", "[No Data]"
-            leg3_name, leg3_metric = "Vacant Slot", "[No Data]"
-            leg4_name, leg4_metric = "Vacant Slot", "[No Data]"
-
-            if len(relay_pool) >= 4:
-                # Leg 1: Block Start
-                relay_pool = sorted(relay_pool, key=lambda x: x['best_block'])
-                r1 = relay_pool.pop(0)
-                leg1_name, leg1_metric = r1['name'], f"[Block Start: {r1['best_block']:.2f}s]"
-                
-                # Leg 2: Straight Fly
-                relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
-                r2 = relay_pool.pop(0)
-                leg2_name, leg2_metric = r2['name'], f"[Fly Split: {r2['best_fly']:.2f}s]"
-                
-                # Leg 4: Anchor Closer
-                relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
-                r4 = relay_pool.pop(0)
-                leg4_name, leg4_metric = r4['name'], f"[Anchor Fly: {r4['fly']:.2f}s]"
-                
-                # Leg 3: Curve
-                relay_pool = sorted(relay_pool, key=lambda x: x['best_fly'])
-                r3 = relay_pool.pop(0)
-                leg3_name, leg3_metric = r3['name'], f"[Fly Split: {r3['best_fly']:.2f}s]"
-
-        # =========================================================================
-        # CROSS-MODULE GO MARK SYNCHRONIZER
-        # =========================================================================
-        if 'relay_go_marks' in st.session_state and isinstance(st.session_state.relay_go_marks, dict):
-            # Pull direct high-precision steps computed via Module 5's action button
-            step_1to2 = st.session_state.relay_go_marks.get('1to2', 17.0)
-            step_2to3 = st.session_state.relay_go_marks.get('2to3', 17.0)
-            step_3to4 = st.session_state.relay_go_marks.get('3to4', 17.0)
-        else:
-            # Clean mathematical fallback step equations if optimizer hasn't been engaged
-            step_1to2 = 17.0
-            step_2to3 = 17.0
-            step_3to4 = 17.0
-
-        # 5. ReportLab PDF Generation Definition Routine
-        def generate_ad_pdf(coach, program, squad, benchmark, roster, r1, r2, r3, r4, m1, m2, m3, m4, count, impr, vel, s1, s2, s3):
+        # --- PDF GENERATION ENGINE ---
+        def generate_ad_pdf(roster_data):
             buffer = io.BytesIO()
-            doc = SimpleDocTemplate(
-                buffer, 
-                pagesize=letter,
-                rightMargin=36, leftMargin=36, 
-                topMargin=36, bottomMargin=36
-            )
+            doc = SimpleDocTemplate(buffer, pagesize=letter)
+            story = [Paragraph("SEASON SPEED REPORT", getSampleStyleSheet()['Heading1'])]
             
-            styles = getSampleStyleSheet()
-            title_style = ParagraphStyle('PDFTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=16, leading=20, textColor=colors.black)
-            meta_style = ParagraphStyle('PDFMeta', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=14, textColor=colors.HexColor("#444444"))
-            section_style = ParagraphStyle('PDFSection', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=12, leading=16, spaceBefore=10, spaceAfter=6, textColor=colors.black)
-            bullet_style = ParagraphStyle('PDFBullet', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=15, leftIndent=15)
-            table_hdr_style = ParagraphStyle('PDFTableHdr', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=colors.black)
-            table_body_style = ParagraphStyle('PDFTableBody', parent=styles['Normal'], fontName='Helvetica', fontSize=9)
-
-            story = []
-            story.append(Paragraph(f"■ {program.upper()} — 2026 SEASON SPEED REPORT", title_style))
-            story.append(Paragraph(f"Report Generated: {datetime.today().strftime('%B %d, %Y')} &nbsp;|&nbsp; Head Coach: {coach}", meta_style))
-            story.append(Spacer(1, 10))
-            story.append(HRFlowable(width="100%", thickness=1.5, color=colors.black, spaceBefore=1, spaceAfter=15))
-
-            story.append(Paragraph(f"[ SQUAD OVERVIEW: {squad} ]", section_style))
-            story.append(Paragraph(f"• Total Active Student-Athletes Tracked: <b>{count}</b>", bullet_style))
-            story.append(Paragraph(f"• Avg. 20m Fly Block Performance Improvement: <b>{impr}</b>", bullet_style))
-            story.append(Paragraph(f"• Team Speed Peak Velocity Aggregate: <b>{vel} (Average)</b>", bullet_style))
-            story.append(Spacer(1, 15))
-
-            story.append(Paragraph("■ PERFORMANCE ROSTER & 100M PROJECTED RANKINGS", section_style))
+            # Table Data
+            table_data = [["Name", "Baseline", "PR", "Delta", "Proj. 100m"]]
+            for r in roster_data:
+                table_data.append([r['name'], r['baseline'], r['pr'], r['delta'], r['proj']])
             
-            table_data = [[
-                Paragraph("<b>Athlete Name</b>", table_hdr_style), 
-                Paragraph("<b>Baseline Fly</b>", table_hdr_style), 
-                Paragraph("<b>Current PR</b>", table_hdr_style), 
-                Paragraph("<b>Net Delta</b>", table_hdr_style), 
-                Paragraph("<b>Proj. 100m</b>", table_hdr_style)
-            ]]
+            t = Table(table_data)
+            t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.black)]))
+            story.append(t)
             
-            for row in roster:
-                table_data.append([
-                    Paragraph(row['name'], table_body_style),
-                    Paragraph(row['baseline'], table_body_style),
-                    Paragraph(row['pr'], table_body_style),
-                    Paragraph(row['delta'], table_body_style),
-                    Paragraph(row['proj'], table_body_style)
-                ])
-                
-            if len(roster) == 0:
-                table_data.append([Paragraph("No matching active athlete logs available.", table_body_style), "", "", "", ""])
-            
-            col_widths = [2.25*inch, 1.25*inch, 1.25*inch, 1.0*inch, 1.25*inch]
-            roster_table = Table(table_data, colWidths=col_widths)
-            roster_table.setStyle(TableStyle([
-                ('LINEBELOW', (0,0), (-1,0), 1.5, colors.black),
-                ('BOTTOMPADDING', (0,0), (-1,0), 5),
-                ('TOPPADDING', (0,1), (-1,-1), 4),
-                ('BOTTOMPADDING', (0,1), (-1,-1), 4),
-                ('LINEBELOW', (0,1), (-1,-1), 0.5, colors.HexColor("#DDDDDD")),
-            ]))
-            story.append(roster_table)
-            story.append(Spacer(1, 5))
-            story.append(Paragraph(f"<i>* Denotes State Qualifying standard projected ({benchmark:.2f}s)</i>", meta_style))
-            story.append(Spacer(1, 15))
-
-            story.append(Paragraph("■ PROPOSED 4x100M RELAY LINEUP (DATA-OPTIMIZED)", section_style))
-            story.append(Paragraph(f"• <b>Leg 1 (Starter):</b> {r1} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{m1}", bullet_style))
-            story.append(Paragraph(f"• <b>Leg 2 (Straight):</b> {r2} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{m2}", bullet_style))
-            story.append(Paragraph(f"• <b>Leg 3 (Curve):</b> &nbsp;&nbsp;&nbsp;{r3} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{m3}", bullet_style))
-            story.append(Paragraph(f"• <b>Leg 4 (Anchor):</b> &nbsp;&nbsp;{r4} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{m4}", bullet_style))
-            
-            story.append(Spacer(1, 8))
-            story.append(Paragraph("■ <b>RECOMMENDED RELAY GO MARKS:</b>", section_style))
-            story.append(Paragraph(f"- Exch 1 (1 to 2): {s1:.1f} Steps &nbsp;|&nbsp; Exch 2 (2 to 3): {s2:.1f} Steps &nbsp;|&nbsp; Exch 3 (3 to 4): {s3:.1f} Steps", bullet_style))
-            
-            story.append(Spacer(1, 40))
-            story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#999999"), spaceBefore=10, spaceAfter=10))
-            story.append(Paragraph("<b>Verified By:</b> RDZ Speed Intelligence System Dashboard", meta_style))
-            story.append(Paragraph("<i>This document contains certified high-precision metrics compiled for athletic recruitment evaluation and administrative review.</i>", meta_style))
-
             doc.build(story)
             buffer.seek(0)
             return buffer
 
-        # Pre-build compiled download asset with dynamic steps passed through
-        pdf_data = generate_ad_pdf(
-            coach_name, program_name, squad_division, state_qual_time, processed_roster,
-            leg1_name, leg2_name, leg3_name, leg4_name, leg1_metric, leg2_metric, leg3_metric, leg4_metric,
-            tracked_count, avg_improvement, avg_velocity, step_1to2, step_2to3, step_3to4
-        )
-
-        # 6. Streamlit Document UI Container Preview Panel Rendering
-        st.markdown("### 📋 Document Preview Panel")
-        with st.container(border=True):
-            st.markdown(f"### ■ {program_name.upper()} — 2026 SEASON SPEED REPORT")
-            current_date_str = datetime.today().strftime('%B %d, %Y')
-            st.caption(f"Report Generated: {current_date_str} | Head Coach: {coach_name}")
-            st.write("")
-            
-            st.markdown(f"**[ SQUAD OVERVIEW: {squad_division} ]**")
-            st.markdown(f"• Total Active Student-Athletes Tracked: **{tracked_count}** \n• Avg. 20m Fly Block Performance Improvement: **{avg_improvement}** \n• Team Speed Peak Velocity Aggregate: **{avg_velocity} (Average)**")
-            st.write("")
-            
-            st.markdown("### ■ PERFORMANCE ROSTER & 100M PROJECTED RANKINGS")
-            
-            ui_table_data = []
-            for item in processed_roster:
-                ui_table_data.append({
-                    "Athlete Name": item['name'],
-                    "Baseline Fly": item['baseline'],
-                    "Current PR": item['pr'],
-                    "Net Delta": item['delta'],
-                    "Proj. 100m": item['proj']
-                })
-            
-            if ui_table_data:
-                st.dataframe(pd.DataFrame(ui_table_data), hide_index=True, use_container_width=True)
-            else:
-                st.info("No active running session parameters stored matching current selection parameters.")
-                
-            st.caption(f"* Denotes State Qualifying standard projected ({state_qual_time:.2f}s)")
-            st.write("")
-            
-            st.markdown("### ■ PROPOSED 4x100M RELAY LINEUP (DATA-OPTIMIZED)")
-            st.markdown(f"• **Leg 1 (Starter):** {leg1_name} {leg1_metric} \n• **Leg 2 (Straight):** {leg2_name} {leg2_metric} \n• **Leg 3 (Curve):** {leg3_name} {leg3_metric} \n• **Leg 4 (Anchor):** {leg4_name} {leg4_metric}")
-            st.write("")
-            
-            st.markdown("### ■ RECOMMENDED RELAY GO MARKS:")
-            # Display step indicators as dynamic whole or float indicators depending on math calculations
-            st.markdown(f"- Exch 1 (1 to 2): **{step_1to2:.1f} Steps** | Exch 2 (2 to 3): **{step_2to3:.1f} Steps** | Exch 3 (3 to 4): **{step_3to4:.1f} Steps**")
-            st.write("---")
-            
-            st.caption("**Verified By:** RDZ Speed Intelligence System Dashboard")
-            st.caption("*This document contains certified high-precision metrics compiled for athletic recruitment evaluation and administrative review.*")
-
-        st.write("")
-        st.download_button(
-            label="📄 Generate & Download Coach's Report",
-            data=pdf_data,
-            file_name=f"{squad_division.lower().replace(' ', '_')}_speed_report.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        ) 
+        pdf_data = generate_ad_pdf(processed_roster)
+        
+        st.download_button("📥 Download PDF Report", data=pdf_data, file_name="report.pdf", mime="application/pdf")
