@@ -375,9 +375,7 @@ elif app_portal == "🏆 Team Leaderboards":
                 c1, c2 = st.columns([4, 1])
                 c1.markdown(f"#### {rank}. {row['name']} *({row.get('group', 'Sprints')})*")
                 c2.markdown(f"### **{row['fat']:.2f}{suffix}**")
-                
-elif app_portal == "📄 AD Report Export":
-    st.title("📄 Executive AD Report Generator")
+            
 # ==========================================
 # MODULE 7: AD REPORT EXPORT ("THE AD CLOSER") - COMPLETE & AUDITED
 # ==========================================
