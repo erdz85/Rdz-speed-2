@@ -544,135 +544,78 @@ elif app_portal == "⏱️ Workout Tracker":
             st.info("No records found.")
             
 # ==========================================
-# MODULE 3: LIVE SESSION DASHBOARD (UPDATED)
+# MODULE 3: LIVE SESSION DASHBOARD (UNIFIED)
 # ==========================================
 elif app_portal == "📆 Live Session Dashboard":
     st.title("📆 Today's Live Session Dashboard")
-    st.markdown("Real-time tracking matrix of sprints and calculated projections captured during today's training session.")
+    st.markdown("Real-time tracking matrix of sprints and calculated projections captured today.")
 
-    # --- SAFE DATA RETRIEVAL ENGINE ---
     if 'workout_logs' not in st.session_state or st.session_state.workout_logs.empty:
-        st.info("ℹ️ No workout logs recorded in the system yet. Sprints logged today will appear here.")
+        st.info("ℹ️ No workout logs recorded in the system yet.")
     else:
         from datetime import datetime
         import pandas as pd
-        today_str = datetime.today().strftime('%Y-%m-%d')
         
-        # 1. Standardize Workout Logs DataFrame
+        today_str = datetime.today().strftime('%Y-%m-%d')
         logs_clean = st.session_state.workout_logs.copy()
         logs_clean.columns = [str(c).lower() for c in logs_clean.columns]
-        
-        # Isolate today's data rows exclusively
         todays_logs = logs_clean[logs_clean['date'] == today_str].copy()
         
         if todays_logs.empty:
-            st.info(f"ℹ️ No repetitions logged yet for today ({today_str}). Use the Tracker module to log splits.")
+            st.info(f"ℹ️ No repetitions logged yet for today ({today_str}).")
         elif 'athletes' not in st.session_state or st.session_state.athletes.empty:
-            st.warning("⚠️ Roster database missing. Please ensure athletes are loaded in the Roster Hub.")
+            st.warning("⚠️ Roster database missing.")
         else:
-            # 2. Standardize Roster DataFrame
             roster_clean = st.session_state.athletes.copy()
             roster_clean.columns = [str(c).lower() for c in roster_clean.columns]
             
-            # Smart Key Resolution Systems
-            right_key = 'id' if 'id' in roster_clean.columns else ('athlete_id' if 'athlete_id' in roster_clean.columns else roster_clean.columns[0])
+            # Key Resolution
+            right_key = 'id' if 'id' in roster_clean.columns else 'athlete_id'
+            name_key = 'name' if 'name' in roster_clean.columns else roster_clean.columns[1]
+            gender_key = 'gender' if 'gender' in roster_clean.columns else 'sex'
             
-            if 'full_name' in roster_clean.columns:
-                name_key = 'full_name'
-            elif 'name' in roster_clean.columns:
-                name_key = 'name'
-            else:
-                name_candidates = [c for c in roster_clean.columns if 'name' in c]
-                name_key = name_candidates[0] if name_candidates else roster_clean.columns[1]
-            
-            gender_key = 'gender' if 'gender' in roster_clean.columns else ('sex' if 'sex' in roster_clean.columns else None)
-            
-            # 3. Clean type formats to match strings exactly (Eliminates numeric vs text merge drops)
-            todays_logs['athlete_id'] = todays_logs['athlete_id'].astype(str).str.strip()
-            roster_clean[right_key] = roster_clean[right_key].astype(str).str.strip()
-            
-            # Force target column formatting to float metrics
             fat_col = 'fat' if 'fat' in todays_logs.columns else todays_logs.columns[-2]
-            todays_logs[fat_col] = pd.to_numeric(todays_logs[fat_col], errors='coerce')
             
-            # ==========================================
-            # COMPILED SESSION MATRIX TRACKER
-            # ==========================================
+            # Compiled Session Matrix
             st.subheader("🏁 Compiled Today's Best Summary Matrix")
-            st.markdown("The best recorded performance metrics per athlete captured during today's workspace window.")
             
-            # Generate the aggregated top values for today's logs specifically
             session_fly = todays_logs[todays_logs['type'] == '20m_fly'].groupby('athlete_id')[fat_col].min().to_dict()
             session_block = todays_logs[todays_logs['type'] == '30m_block'].groupby('athlete_id')[fat_col].min().to_dict()
             
-            # Filter roster down to only athletes who have run today
             athletes_active_today = roster_clean[roster_clean[right_key].isin(todays_logs['athlete_id'].unique())]
             
-            # Grid Table Headers
             h1, h2, h3, h4 = st.columns([3, 2, 2, 3])
-            with h1: st.markdown("👤 **Athlete Full Name**")
-            with h2: st.markdown("⚡ **Best 20m Fly Today**")
-            with h3: st.markdown("🧱 **Best 30m Block Today**")
+            with h1: st.markdown("👤 **Athlete**")
+            with h2: st.markdown("⚡ **Best Fly**")
+            with h3: st.markdown("🧱 **Best Block**")
             with h4: st.markdown("🎯 **Session Proj. 100m**")
-            st.markdown("<hr style='margin: 0px 0px 12px 0px; border-color: #555;' />", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 0px 0px 12px 0px;' />", unsafe_allow_html=True)
             
             for _, athlete in athletes_active_today.iterrows():
                 a_id = str(athlete[right_key]).strip()
                 a_name = athlete[name_key]
-                a_gender = str(athlete[gender_key]).lower() if gender_key and pd.notna(athlete[gender_key]) else 'male'
+                a_gender = str(athlete.get(gender_key, 'male')).lower()
                 
-                # Pull today's metrics
-                best_fly = session_fly.get(a_id, None)
-                best_block = session_block.get(a_id, None)
+                # Fetch Best: Today's, then historical
+                best_fly = session_fly.get(a_id)
+                best_block = session_block.get(a_id)
                 
-                fly_str = f"{best_fly:.2f}s" if best_fly else "--"
-                block_str = f"{best_block:.2f}s" if best_block else "--"
+                fly_input = best_fly if best_fly else logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '20m_fly')][fat_col].min()
+                block_input = best_block if best_block else logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '30m_block')][fat_col].min()
                 
-                # --- ELITE PRECISION KINEMATIC PROJECTION SYSTEM ---
-                # Prioritize today's efforts. If an effort is missing, look up historical PRs before falling back.
-                fly_input = best_fly
-                block_input = best_block
+                # Coerce to None if NaN
+                fly_input = float(fly_input) if pd.notna(fly_input) else None
+                block_input = float(block_input) if pd.notna(block_input) else None
                 
-                if fly_input is None:
-                    hist_fly = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '20m_fly')][fat_col]
-                    if not hist_fly.empty:
-                        fly_input = hist_fly.min()
-                        
-                if block_input is None:
-                    hist_block = logs_clean[(logs_clean['athlete_id'] == a_id) & (logs_clean['type'] == '30m_block')][fat_col]
-                    if not hist_block.empty:
-                        block_input = hist_block.min()
+                # UNIFIED PROJECTION CALL
+                proj_val = get_unified_projection("20m_fly", fly_input or 0, block_input, fly_input, a_gender)
                 
-                # Compute projection via updated core calculation engine
-                if 'calculate_precise_100m' in globals():
-                    proj_val = calculate_precise_100m(thirty_block=block_input, twenty_fly=fly_input, gender=a_gender)
-                    
-                    # Safety fallback if athlete has literally never run a 20m fly in app history
-                    if proj_val is None and block_input is not None:
-                        gender_const = 1.17 if 'female' in a_gender else 1.15
-                        proj_val = round((block_input * 2.5) + gender_const, 2)
-                else:
-                    # Clean math fallback in case global engine hasn't fully reloaded
-                    if fly_input is not None:
-                        if block_input is not None:
-                            proj_val = round(block_input + (fly_input * 3.5), 2)
-                        else:
-                            gender_const = 1.17 if 'female' in a_gender else 1.15
-                            proj_val = round((fly_input * 5.0) + gender_const, 2)
-                    elif block_input is not None:
-                        gender_const = 1.17 if 'female' in a_gender else 1.15
-                        proj_val = round((block_input * 2.5) + gender_const, 2)
-                    else:
-                        proj_val = None
-                
-                proj_str = f"**{proj_val:.2f}s**" if proj_val else "--"
-                    
-                # Render Row Elements Matrix
+                # Render
                 r1, r2, r3, r4 = st.columns([3, 2, 2, 3])
                 with r1: st.markdown(f"**{a_name}**")
-                with r2: st.markdown(f"<span style='color:#FF4B4B;'>{fly_str}</span>", unsafe_allow_html=True)
-                with r3: st.markdown(f"<span style='color:#00E676;'>{block_str}</span>", unsafe_allow_html=True)
-                with r4: st.markdown(f"<span style='color:#00B0FF;'>{proj_str}</span>", unsafe_allow_html=True)
+                with r2: st.markdown(f"{fly_input:.2f}s" if fly_input else "--")
+                with r3: st.markdown(f"{block_input:.2f}s" if block_input else "--")
+                with r4: st.markdown(f"**{proj_val:.2f}s**")
                 st.write("---")
                 
 # ==========================================
