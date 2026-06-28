@@ -931,7 +931,7 @@ elif app_portal == "📄 AD Report Export":
                                      "proj": f"{proj_val:.2f}s{' *' if proj_val <= state_qual_time else ''}" if proj_val else "--"})
             relay_pool.append({"name": a_name, "best_fly": f_best or 2.2, "best_block": b_best or 4.2})
 
-        =========================================================================
+        # =========================================================================
         # 4. CROSS-MODULE LINEUP INTEGRATION (READS FROM MODULE 5 OVERRIDES)
         # =========================================================================
         if 'custom_relay_lineup' in st.session_state and isinstance(st.session_state.custom_relay_lineup, dict):
